@@ -1,0 +1,18 @@
+# Build
+target/
+*.log
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# OS
+.DS_Store
+
+# Env / secrets
+.env
+application-local.properties
+
+# Frontend (exclude it)
+src/Frontend/
