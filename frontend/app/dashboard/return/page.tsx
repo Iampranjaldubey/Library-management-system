@@ -1,9 +1,10 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
+import { transactionsApi } from "@/lib/api"
 import { PageHeader } from "@/components/dashboard/page-header"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import {
   Select,
@@ -12,85 +13,111 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
-import { format, differenceInDays } from "date-fns"
-import { RotateCcw, Check, AlertTriangle, Search } from "lucide-react"
+import { format, differenceInDays, parseISO } from "date-fns"
+import { RotateCcw, Check, AlertTriangle, AlertCircle, CheckCircle2 } from "lucide-react"
 
-const issuedBooks = [
-  {
-    id: "ISS001",
-    bookTitle: "The Pragmatic Programmer",
-    memberId: "M001",
-    memberName: "John Doe",
-    issueDate: new Date("2026-04-01"),
-    dueDate: new Date("2026-04-15"),
-    status: "on-time",
-  },
-  {
-    id: "ISS002",
-    bookTitle: "Atomic Habits",
-    memberId: "M002",
-    memberName: "Jane Smith",
-    issueDate: new Date("2026-03-20"),
-    dueDate: new Date("2026-04-03"),
-    status: "overdue",
-  },
-  {
-    id: "ISS003",
-    bookTitle: "System Design Interview",
-    memberId: "M003",
-    memberName: "Bob Johnson",
-    issueDate: new Date("2026-04-10"),
-    dueDate: new Date("2026-04-24"),
-    status: "on-time",
-  },
-  {
-    id: "ISS004",
-    bookTitle: "Deep Work",
-    memberId: "M004",
-    memberName: "Alice Williams",
-    issueDate: new Date("2026-03-15"),
-    dueDate: new Date("2026-03-29"),
-    status: "overdue",
-  },
-]
-
-const bookConditions = ["Excellent", "Good", "Fair", "Poor", "Damaged"]
+interface IssuedBook {
+  id: number
+  bookTitle: string
+  userName: string
+  issueDate: string
+  dueDate: string
+  status: "on-time" | "overdue"
+}
 
 export default function ReturnBookPage() {
-  const [selectedBook, setSelectedBook] = useState<string>("")
-  const [searchQuery, setSearchQuery] = useState("")
+  const router = useRouter()
+  const [issuedBooks, setIssuedBooks] = useState<IssuedBook[]>([])
+  const [selectedTransactionId, setSelectedTransactionId] = useState<string>("")
+  const [errorMessage, setErrorMessage] = useState<string>("")
+  const [successMessage, setSuccessMessage] = useState<string>("")
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isSuccess, setIsSuccess] = useState(false)
 
-  const selectedIssue = issuedBooks.find((book) => book.id === selectedBook)
+  // Check if user is logged in
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const token = localStorage.getItem("token")
+      if (!token) {
+        router.push("/")
+        return
+      }
+    }
+  }, [router])
 
-  const filteredBooks = issuedBooks.filter(
-    (book) =>
-      book.bookTitle.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      book.memberName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      book.id.toLowerCase().includes(searchQuery.toLowerCase())
-  )
+  const fetchActiveTransactions = () => {
+    transactionsApi.getAll()
+      .then((response) => {
+        if (response.success && response.data) {
+          const activeTransactions = response.data
+            .filter((t: any) => !t.returnDate)
+            .map((t: any) => ({
+              id: t.id,
+              bookTitle: t.bookTitle,
+              userName: t.userName,
+              issueDate: t.issueDate,
+              dueDate: t.dueDate,
+              status: new Date(t.dueDate) < new Date() ? "overdue" : "on-time"
+            }))
+          setIssuedBooks(activeTransactions)
+        }
+      })
+      .catch((error) => {
+        console.error("Error fetching transactions:", error)
+        setErrorMessage("Failed to load issued books: " + error.message)
+      })
+  }
+
+  useEffect(() => {
+    fetchActiveTransactions()
+  }, [])
+
+  const selectedIssue = issuedBooks.find((book) => String(book.id) === selectedTransactionId)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    setErrorMessage("")
+    setSuccessMessage("")
+
+    if (!selectedTransactionId) {
+      setErrorMessage("Please select a book to return.")
+      return
+    }
+
     setIsSubmitting(true)
-    await new Promise((resolve) => setTimeout(resolve, 1500))
-    setIsSubmitting(false)
-    setIsSuccess(true)
-    setTimeout(() => {
-      setIsSuccess(false)
-      setSelectedBook("")
-    }, 3000)
+    try {
+      const response = await transactionsApi.return(Number(selectedTransactionId))
+      if (response.success) {
+        const fine = response.data.fine
+        setSuccessMessage(
+          fine && fine > 0
+            ? `Book returned successfully! Fine charged: ₹${fine}`
+            : "Book returned successfully!"
+        )
+        setIsSuccess(true)
+        setSelectedTransactionId("")
+        // Refresh the list immediately so the returned book disappears
+        fetchActiveTransactions()
+        setTimeout(() => {
+          setIsSuccess(false)
+          setSuccessMessage("")
+        }, 3000)
+      }
+    } catch (error: any) {
+      setErrorMessage(error.message)
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
-  const calculateFine = (dueDate: Date) => {
+  const calculateFine = (dueDate: string) => {
     const today = new Date()
-    const daysOverdue = differenceInDays(today, dueDate)
+    const due = parseISO(dueDate)
+    const daysOverdue = differenceInDays(today, due)
     if (daysOverdue <= 0) return 0
-    return daysOverdue * 0.5 // $0.50 per day
+    return daysOverdue * 5
   }
 
   return (
@@ -115,43 +142,54 @@ export default function ReturnBookPage() {
               </div>
             </div>
 
-            <div className="space-y-4">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  placeholder="Search by book title, member name, or issue ID..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10 bg-input border-border text-foreground placeholder:text-muted-foreground"
-                />
+            {/* Feedback banners — inside the card, above the selector */}
+            {successMessage && (
+              <div className="flex items-center gap-2 rounded-lg border border-primary/20 bg-primary/10 px-4 py-3">
+                <CheckCircle2 className="h-4 w-4 shrink-0 text-primary" />
+                <p className="text-sm text-primary">{successMessage}</p>
               </div>
+            )}
+            {errorMessage && (
+              <div className="flex items-center gap-2 rounded-lg border border-destructive/20 bg-destructive/10 px-4 py-3">
+                <AlertCircle className="h-4 w-4 shrink-0 text-destructive" />
+                <p className="text-sm text-destructive">{errorMessage}</p>
+              </div>
+            )}
 
+            <div className="space-y-4">
               <div className="space-y-2">
                 <Label className="text-foreground">Select Issued Book</Label>
-                <Select value={selectedBook} onValueChange={setSelectedBook}>
+                <Select
+                  value={selectedTransactionId}
+                  onValueChange={(v) => { setSelectedTransactionId(v); setErrorMessage("") }}
+                >
                   <SelectTrigger className="bg-input border-border text-foreground">
                     <SelectValue placeholder="Choose an issued book" />
                   </SelectTrigger>
                   <SelectContent>
-                    {filteredBooks.map((book) => (
-                      <SelectItem key={book.id} value={book.id}>
-                        <div className="flex items-center gap-2">
-                          <span>{book.bookTitle}</span>
-                          <span className="text-muted-foreground">-</span>
-                          <span className="text-muted-foreground">
-                            {book.memberName}
-                          </span>
-                          {book.status === "overdue" && (
-                            <Badge
-                              variant="destructive"
-                              className="ml-2 text-xs"
-                            >
-                              Overdue
-                            </Badge>
-                          )}
-                        </div>
-                      </SelectItem>
-                    ))}
+                    {issuedBooks.length === 0 ? (
+                      <SelectItem value="none" disabled>No issued books</SelectItem>
+                    ) : (
+                      issuedBooks.map((book) => (
+                        <SelectItem key={book.id} value={String(book.id)}>
+                          <div className="flex items-center gap-2">
+                            <span>{book.bookTitle}</span>
+                            <span className="text-muted-foreground">-</span>
+                            <span className="text-muted-foreground">
+                              {book.userName}
+                            </span>
+                            {book.status === "overdue" && (
+                              <Badge
+                                variant="destructive"
+                                className="ml-2 text-xs"
+                              >
+                                Overdue
+                              </Badge>
+                            )}
+                          </div>
+                        </SelectItem>
+                      ))
+                    )}
                   </SelectContent>
                 </Select>
               </div>
@@ -171,19 +209,19 @@ export default function ReturnBookPage() {
                   <div className="space-y-1">
                     <p className="text-sm text-muted-foreground">Member</p>
                     <p className="font-medium text-foreground">
-                      {selectedIssue.memberName} ({selectedIssue.memberId})
+                      {selectedIssue.userName}
                     </p>
                   </div>
                   <div className="space-y-1">
                     <p className="text-sm text-muted-foreground">Issue Date</p>
                     <p className="font-medium text-foreground">
-                      {format(selectedIssue.issueDate, "PPP")}
+                      {format(parseISO(selectedIssue.issueDate), "PPP")}
                     </p>
                   </div>
                   <div className="space-y-1">
                     <p className="text-sm text-muted-foreground">Due Date</p>
                     <p className="font-medium text-foreground">
-                      {format(selectedIssue.dueDate, "PPP")}
+                      {format(parseISO(selectedIssue.dueDate), "PPP")}
                     </p>
                   </div>
                 </div>
@@ -196,45 +234,13 @@ export default function ReturnBookPage() {
                         Book is Overdue
                       </p>
                       <p className="text-sm text-destructive/80">
-                        {differenceInDays(new Date(), selectedIssue.dueDate)}{" "}
-                        days overdue. Fine: $
+                        {differenceInDays(new Date(), parseISO(selectedIssue.dueDate))}{" "}
+                        days overdue. Fine: ₹
                         {calculateFine(selectedIssue.dueDate).toFixed(2)}
                       </p>
                     </div>
                   </div>
                 )}
-
-                <div className="space-y-2">
-                  <Label htmlFor="condition" className="text-foreground">
-                    Book Condition
-                  </Label>
-                  <Select>
-                    <SelectTrigger className="bg-input border-border text-foreground">
-                      <SelectValue placeholder="Select condition" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {bookConditions.map((condition) => (
-                        <SelectItem
-                          key={condition}
-                          value={condition.toLowerCase()}
-                        >
-                          {condition}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="returnNotes" className="text-foreground">
-                    Notes (Optional)
-                  </Label>
-                  <Textarea
-                    id="returnNotes"
-                    placeholder="Add any notes about the return..."
-                    className="bg-input border-border text-foreground placeholder:text-muted-foreground min-h-24"
-                  />
-                </div>
               </div>
             )}
           </div>
@@ -244,13 +250,17 @@ export default function ReturnBookPage() {
               type="button"
               variant="outline"
               className="border-border text-foreground"
-              onClick={() => setSelectedBook("")}
+              onClick={() => {
+                setSelectedTransactionId("")
+                setErrorMessage("")
+                setSuccessMessage("")
+              }}
             >
               Cancel
             </Button>
             <Button
               type="submit"
-              disabled={!selectedBook || isSubmitting || isSuccess}
+              disabled={!selectedTransactionId || isSubmitting || isSuccess}
               className={cn(
                 "gap-2",
                 isSuccess

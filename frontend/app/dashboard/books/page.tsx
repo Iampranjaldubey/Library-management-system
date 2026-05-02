@@ -1,7 +1,8 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { apiFetch } from "@/lib/api"
+import { useRouter } from "next/navigation"
+import { booksApi, dedupeBooks } from "@/lib/api"
 import { PageHeader } from "@/components/dashboard/page-header"
 import { DataTable, type Book } from "@/components/dashboard/data-table"
 import { Button } from "@/components/ui/button"
@@ -25,31 +26,80 @@ import { Plus, Search } from "lucide-react"
 
 
 export default function BooksPage() {
+  const router = useRouter()
   const [allBooks, setAllBooks] = useState<Book[]>([])
   const [searchQuery, setSearchQuery] = useState("")
   const [categoryFilter, setCategoryFilter] = useState("all")
   const [statusFilter, setStatusFilter] = useState("all")
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
+  // Check if user is logged in
   useEffect(() => {
-    apiFetch("/books")
-      .then((data: any) => {
-        console.log("Books response:", data)
-        const mappedBooks: Book[] = Array.isArray(data) ? data.map((b: any) => ({
-          id: String(b.id || Math.random()),
+    if (typeof window !== "undefined") {
+      const token = localStorage.getItem("token")
+      if (!token) {
+        router.push("/")
+        return
+      }
+    }
+  }, [router])
+
+  const fetchBooks = () => {
+    booksApi.getAll()
+      .then((response) => {
+        console.log("Books response:", response)
+        const booksData = response.data
+        const mappedBooks: Book[] = Array.isArray(booksData) ? booksData.map((b: any) => ({
+          id: String(b.id),
           title: b.title || "Unknown",
           author: b.author || "Unknown",
           isbn: b.isbn || "N/A",
           category: b.category || "Uncategorized",
-          status: b.status || (b.available === false ? "issued" : "available"),
-          copies: b.copies !== undefined ? b.copies : 1
+          status: b.available ? "available" : "issued",
+          copies: 1
         })) : []
-        setAllBooks(mappedBooks)
+        setAllBooks(dedupeBooks(mappedBooks))
       })
       .catch((error) => {
         console.error("Error fetching books:", error)
+        // Don't show alert on initial load if user is not logged in
+        if (error.message !== "Session expired. Please login again.") {
+          alert("Failed to fetch books: " + error.message)
+        }
       })
+  }
+
+  useEffect(() => {
+    fetchBooks()
   }, [])
+
+  const handleAddBook = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
+    setIsSubmitting(true)
+
+    try {
+      const formData = new FormData(e.currentTarget)
+      const bookData = {
+        title: formData.get("title") as string,
+        author: formData.get("author") as string,
+        isbn: formData.get("isbn") as string,
+        category: formData.get("category") as string,
+      }
+
+      const response = await booksApi.add(bookData)
+      if (response.success) {
+        alert("Book added successfully!")
+        setIsAddDialogOpen(false)
+        fetchBooks() // Refresh the list
+        e.currentTarget.reset()
+      }
+    } catch (error: any) {
+      alert("Failed to add book: " + error.message)
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
 
   const filteredBooks = allBooks.filter((book) => {
     const matchesSearch =
@@ -85,14 +135,16 @@ export default function BooksPage() {
             <DialogHeader>
               <DialogTitle className="text-foreground">Add New Book</DialogTitle>
             </DialogHeader>
-            <form className="space-y-4">
+            <form className="space-y-4" onSubmit={handleAddBook}>
               <div className="space-y-2">
                 <Label htmlFor="title" className="text-foreground">
                   Title
                 </Label>
                 <Input
                   id="title"
+                  name="title"
                   placeholder="Enter book title"
+                  required
                   className="bg-input border-border text-foreground"
                 />
               </div>
@@ -102,7 +154,9 @@ export default function BooksPage() {
                 </Label>
                 <Input
                   id="author"
+                  name="author"
                   placeholder="Enter author name"
+                  required
                   className="bg-input border-border text-foreground"
                 />
               </div>
@@ -112,40 +166,23 @@ export default function BooksPage() {
                 </Label>
                 <Input
                   id="isbn"
+                  name="isbn"
                   placeholder="Enter ISBN"
+                  required
                   className="bg-input border-border text-foreground"
                 />
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="category" className="text-foreground">
-                    Category
-                  </Label>
-                  <Select>
-                    <SelectTrigger className="bg-input border-border text-foreground">
-                      <SelectValue placeholder="Select" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {categories.map((cat) => (
-                        <SelectItem key={cat} value={cat}>
-                          {cat}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="copies" className="text-foreground">
-                    Copies
-                  </Label>
-                  <Input
-                    id="copies"
-                    type="number"
-                    min="1"
-                    placeholder="1"
-                    className="bg-input border-border text-foreground"
-                  />
-                </div>
+              <div className="space-y-2">
+                <Label htmlFor="category" className="text-foreground">
+                  Category
+                </Label>
+                <Input
+                  id="category"
+                  name="category"
+                  placeholder="Enter category"
+                  required
+                  className="bg-input border-border text-foreground"
+                />
               </div>
               <div className="flex justify-end gap-3 pt-4">
                 <Button
@@ -153,18 +190,16 @@ export default function BooksPage() {
                   variant="outline"
                   onClick={() => setIsAddDialogOpen(false)}
                   className="border-border text-foreground"
+                  disabled={isSubmitting}
                 >
                   Cancel
                 </Button>
                 <Button
                   type="submit"
                   className="bg-primary text-primary-foreground hover:bg-primary/90"
-                  onClick={(e) => {
-                    e.preventDefault()
-                    setIsAddDialogOpen(false)
-                  }}
+                  disabled={isSubmitting}
                 >
-                  Add Book
+                  {isSubmitting ? "Adding..." : "Add Book"}
                 </Button>
               </div>
             </form>

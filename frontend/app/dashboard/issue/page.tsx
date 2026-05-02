@@ -1,6 +1,8 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
+import { booksApi, transactionsApi, dedupeBooks } from "@/lib/api"
 import { PageHeader } from "@/components/dashboard/page-header"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -12,43 +14,92 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Textarea } from "@/components/ui/textarea"
-import { Calendar } from "@/components/ui/calendar"
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover"
 import { cn } from "@/lib/utils"
 import { format } from "date-fns"
-import { CalendarIcon, BookPlus, Check } from "lucide-react"
-
-const availableBooks = [
-  { id: "1", title: "Clean Code", author: "Robert C. Martin" },
-  { id: "3", title: "Design Patterns", author: "Gang of Four" },
-  { id: "6", title: "Introduction to Algorithms", author: "Thomas H. Cormen" },
-  { id: "7", title: "Refactoring", author: "Martin Fowler" },
-]
-
-const members = [
-  { id: "M001", name: "John Doe", email: "john@example.com" },
-  { id: "M002", name: "Jane Smith", email: "jane@example.com" },
-  { id: "M003", name: "Bob Johnson", email: "bob@example.com" },
-  { id: "M004", name: "Alice Williams", email: "alice@example.com" },
-]
+import { BookPlus, Check, AlertCircle, CheckCircle2 } from "lucide-react"
 
 export default function IssueBookPage() {
-  const [dueDate, setDueDate] = useState<Date>()
+  const router = useRouter()
+  const [availableBooks, setAvailableBooks] = useState<Array<{ id: number; title: string; author: string; isbn: string }>>([])
+  const [selectedBookId, setSelectedBookId] = useState<string>("")
+  const [userId, setUserId] = useState<string>("")
+  const [errorMessage, setErrorMessage] = useState<string>("")
+  const [successMessage, setSuccessMessage] = useState<string>("")
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isSuccess, setIsSuccess] = useState(false)
 
+  // Check if user is logged in and pre-fill userId from stored session
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const token = localStorage.getItem("token")
+      if (!token) {
+        router.push("/")
+        return
+      }
+      try {
+        const stored = localStorage.getItem("user")
+        if (stored) {
+          const user = JSON.parse(stored)
+          if (user?.id) setUserId(String(user.id))
+        }
+      } catch {
+        // ignore parse errors
+      }
+    }
+  }, [router])
+
+  const fetchAvailableBooks = () => {
+    booksApi.getAll(true)
+      .then((response) => {
+        if (response.success && response.data) {
+          const mapped = response.data.map((b: any) => ({
+            id: b.id,
+            title: b.title,
+            author: b.author,
+            isbn: b.isbn,
+          }))
+          setAvailableBooks(dedupeBooks(mapped))
+        }
+      })
+      .catch((error) => {
+        console.error("Error fetching books:", error)
+      })
+  }
+
+  useEffect(() => {
+    fetchAvailableBooks()
+  }, [])
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    setErrorMessage("")
+    setSuccessMessage("")
+
+    if (!selectedBookId || !userId) {
+      setErrorMessage("Please select a book and enter a user ID.")
+      return
+    }
+
     setIsSubmitting(true)
-    await new Promise((resolve) => setTimeout(resolve, 1500))
-    setIsSubmitting(false)
-    setIsSuccess(true)
-    setTimeout(() => setIsSuccess(false), 3000)
+    try {
+      const response = await transactionsApi.issue(Number(selectedBookId), Number(userId))
+      if (response.success) {
+        const dueDate = format(new Date(response.data.dueDate), "PPP")
+        setSuccessMessage(`Book issued successfully! Due date: ${dueDate}`)
+        setIsSuccess(true)
+        setSelectedBookId("")
+        // Refresh available books immediately so the issued book disappears
+        fetchAvailableBooks()
+        setTimeout(() => {
+          setIsSuccess(false)
+          setSuccessMessage("")
+        }, 3000)
+      }
+    } catch (error: any) {
+      setErrorMessage(error.message)
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   return (
@@ -73,41 +124,59 @@ export default function IssueBookPage() {
               </div>
             </div>
 
+            {/* Feedback banners — inside the card, above the fields */}
+            {successMessage && (
+              <div className="flex items-center gap-2 rounded-lg border border-primary/20 bg-primary/10 px-4 py-3">
+                <CheckCircle2 className="h-4 w-4 shrink-0 text-primary" />
+                <p className="text-sm text-primary">{successMessage}</p>
+              </div>
+            )}
+            {errorMessage && (
+              <div className="flex items-center gap-2 rounded-lg border border-destructive/20 bg-destructive/10 px-4 py-3">
+                <AlertCircle className="h-4 w-4 shrink-0 text-destructive" />
+                <p className="text-sm text-destructive">{errorMessage}</p>
+              </div>
+            )}
+
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2 sm:col-span-2">
                 <Label htmlFor="book" className="text-foreground">
                   Select Book
                 </Label>
-                <Select>
+                <Select value={selectedBookId} onValueChange={(v) => { setSelectedBookId(v); setErrorMessage("") }}>
                   <SelectTrigger className="bg-input border-border text-foreground">
                     <SelectValue placeholder="Choose a book" />
                   </SelectTrigger>
                   <SelectContent>
-                    {availableBooks.map((book) => (
-                      <SelectItem key={book.id} value={book.id}>
-                        {book.title} - {book.author}
-                      </SelectItem>
-                    ))}
+                    {availableBooks.length === 0 ? (
+                      <SelectItem value="none" disabled>No available books</SelectItem>
+                    ) : (
+                      availableBooks.map((book) => (
+                        <SelectItem key={book.id} value={String(book.id)}>
+                          {book.title} - {book.author}
+                        </SelectItem>
+                      ))
+                    )}
                   </SelectContent>
                 </Select>
               </div>
 
               <div className="space-y-2 sm:col-span-2">
-                <Label htmlFor="member" className="text-foreground">
-                  Select Member
+                <Label htmlFor="userId" className="text-foreground">
+                  User ID
                 </Label>
-                <Select>
-                  <SelectTrigger className="bg-input border-border text-foreground">
-                    <SelectValue placeholder="Choose a member" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {members.map((member) => (
-                      <SelectItem key={member.id} value={member.id}>
-                        {member.name} ({member.id})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Input
+                  id="userId"
+                  type="number"
+                  placeholder="Enter user ID"
+                  value={userId}
+                  onChange={(e) => { setUserId(e.target.value); setErrorMessage("") }}
+                  required
+                  className="bg-input border-border text-foreground"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Defaults to your own ID. Change to issue to another user.
+                </p>
               </div>
 
               <div className="space-y-2">
@@ -127,40 +196,16 @@ export default function IssueBookPage() {
                 <Label htmlFor="dueDate" className="text-foreground">
                   Due Date
                 </Label>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      className={cn(
-                        "w-full justify-start text-left font-normal bg-input border-border",
-                        !dueDate && "text-muted-foreground"
-                      )}
-                    >
-                      <CalendarIcon className="mr-2 h-4 w-4" />
-                      {dueDate ? format(dueDate, "PPP") : "Pick a date"}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar
-                      mode="single"
-                      selected={dueDate}
-                      onSelect={setDueDate}
-                      initialFocus
-                      disabled={(date) => date < new Date()}
-                    />
-                  </PopoverContent>
-                </Popover>
-              </div>
-
-              <div className="space-y-2 sm:col-span-2">
-                <Label htmlFor="notes" className="text-foreground">
-                  Notes (Optional)
-                </Label>
-                <Textarea
-                  id="notes"
-                  placeholder="Add any additional notes..."
-                  className="bg-input border-border text-foreground placeholder:text-muted-foreground min-h-24"
+                <Input
+                  id="dueDate"
+                  type="text"
+                  value={format(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), "PPP")}
+                  disabled
+                  className="bg-muted border-border text-muted-foreground"
                 />
+                <p className="text-xs text-muted-foreground">
+                  Automatically set to 7 days from today
+                </p>
               </div>
             </div>
           </div>
@@ -170,12 +215,18 @@ export default function IssueBookPage() {
               type="button"
               variant="outline"
               className="border-border text-foreground"
+              onClick={() => {
+                setSelectedBookId("")
+                setUserId("")
+                setErrorMessage("")
+                setSuccessMessage("")
+              }}
             >
               Cancel
             </Button>
             <Button
               type="submit"
-              disabled={isSubmitting || isSuccess}
+              disabled={isSubmitting || isSuccess || !selectedBookId || !userId}
               className={cn(
                 "gap-2",
                 isSuccess

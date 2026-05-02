@@ -1,8 +1,8 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { apiFetch } from "@/lib/api"
+import { authApi } from "@/lib/api"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -13,12 +13,6 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false)
   const router = useRouter()
 
-  useEffect(() => {
-    apiFetch("/books")
-      .then(res => console.log("TEMP TEST SUCCESS:", res))
-      .catch(err => console.error("TEMP TEST ERROR:", err))
-  }, [])
-
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     setIsLoading(true)
@@ -27,16 +21,16 @@ export default function LoginPage() {
       const email = (e.currentTarget.elements.namedItem("email") as HTMLInputElement).value
       const password = (e.currentTarget.elements.namedItem("password") as HTMLInputElement).value
 
-      const response: any = await apiFetch("/auth/login", {
-        method: "POST",
-        body: JSON.stringify({ email, password }),
-      })
+      const response = await authApi.login(email, password)
 
       console.log("Login response:", response)
-      if (response && response.token) {
-        localStorage.setItem("token", response.token)
+      if (response.success && response.data && response.data.token) {
+        localStorage.setItem("token", response.data.token)
+        localStorage.setItem("user", JSON.stringify(response.data))
+        router.push("/dashboard")
+      } else {
+        alert("Login failed: No token received")
       }
-      router.push("/dashboard")
     } catch (error: any) {
       alert(error.message || "An error occurred during login")
     } finally {
