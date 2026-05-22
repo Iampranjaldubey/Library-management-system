@@ -1,12 +1,14 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { useRouter } from "next/navigation"
-import { booksApi, dedupeBooks } from "@/lib/api"
+import { useState, useEffect, useCallback } from "react"
+import { booksApi, dedupeBooks, ApiError, type BookDto } from "@/lib/api"
+import { useProtectedRoute } from "@/hooks/use-protected-route"
 import { PageHeader } from "@/components/dashboard/page-header"
 import { DataTable, type Book } from "@/components/dashboard/data-table"
+import { TableSkeleton } from "@/components/dashboard/skeletons"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import {
   Select,
   SelectContent,
@@ -19,205 +21,126 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
+  DialogFooter,
+  DialogDescription,
 } from "@/components/ui/dialog"
-import { Label } from "@/components/ui/label"
-import { Plus, Search } from "lucide-react"
-
+import { Plus, Search, RefreshCw } from "lucide-react"
+import { toast } from "sonner"
 
 export default function BooksPage() {
-  const router = useRouter()
+  const { isLoading: authLoading } = useProtectedRoute()
+
   const [allBooks, setAllBooks] = useState<Book[]>([])
+  const [isLoading, setIsLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState("")
   const [categoryFilter, setCategoryFilter] = useState("all")
   const [statusFilter, setStatusFilter] = useState("all")
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
-  // Check if user is logged in
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      const token = localStorage.getItem("token")
-      if (!token) {
-        router.push("/")
-        return
-      }
+  const fetchBooks = useCallback(async () => {
+    setIsLoading(true)
+    try {
+      const res = await booksApi.getAll()
+      const mapped: Book[] = Array.isArray(res.data)
+        ? res.data.map((b: BookDto) => ({
+            id: String(b.id),
+            title: b.title || "Unknown",
+            author: b.author || "Unknown",
+            isbn: b.isbn || "N/A",
+            category: b.category || "Uncategorized",
+            status: b.available ? "available" : "issued",
+            copies: 1,
+          }))
+        : []
+      setAllBooks(dedupeBooks(mapped))
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : String(err)
+      if (err instanceof ApiError && err.status === 401) return // handled globally
+      toast.error("Failed to load books", { description: msg })
+    } finally {
+      setIsLoading(false)
     }
-  }, [router])
-
-  const fetchBooks = () => {
-    booksApi.getAll()
-      .then((response) => {
-        console.log("Books response:", response)
-        const booksData = response.data
-        const mappedBooks: Book[] = Array.isArray(booksData) ? booksData.map((b: any) => ({
-          id: String(b.id),
-          title: b.title || "Unknown",
-          author: b.author || "Unknown",
-          isbn: b.isbn || "N/A",
-          category: b.category || "Uncategorized",
-          status: b.available ? "available" : "issued",
-          copies: 1
-        })) : []
-        setAllBooks(dedupeBooks(mappedBooks))
-      })
-      .catch((error) => {
-        console.error("Error fetching books:", error)
-        // Don't show alert on initial load if user is not logged in
-        if (error.message !== "Session expired. Please login again.") {
-          alert("Failed to fetch books: " + error.message)
-        }
-      })
-  }
+  }, [])
 
   useEffect(() => {
-    fetchBooks()
-  }, [])
+    if (!authLoading) fetchBooks()
+  }, [authLoading, fetchBooks])
 
   const handleAddBook = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     setIsSubmitting(true)
-
     try {
-      const formData = new FormData(e.currentTarget)
-      const bookData = {
-        title: formData.get("title") as string,
-        author: formData.get("author") as string,
-        isbn: formData.get("isbn") as string,
-        category: formData.get("category") as string,
-      }
-
-      const response = await booksApi.add(bookData)
-      if (response.success) {
-        alert("Book added successfully!")
+      const fd = new FormData(e.currentTarget)
+      const res = await booksApi.add({
+        title: fd.get("title") as string,
+        author: fd.get("author") as string,
+        isbn: fd.get("isbn") as string,
+        category: fd.get("category") as string,
+      })
+      if (res.success) {
+        toast.success("Book added successfully")
         setIsAddDialogOpen(false)
-        fetchBooks() // Refresh the list
-        e.currentTarget.reset()
+        ;(e.target as HTMLFormElement).reset()
+        fetchBooks()
       }
-    } catch (error: any) {
-      alert("Failed to add book: " + error.message)
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : "Failed to add book"
+      toast.error("Failed to add book", { description: msg })
     } finally {
       setIsSubmitting(false)
     }
   }
 
+  const categories = [...new Set(allBooks.map((b) => b.category))].sort()
+
   const filteredBooks = allBooks.filter((book) => {
+    const q = searchQuery.toLowerCase()
     const matchesSearch =
-      book.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      book.author.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      book.isbn.includes(searchQuery)
-
-    const matchesCategory =
-      categoryFilter === "all" || book.category === categoryFilter
-
-    const matchesStatus =
-      statusFilter === "all" || book.status === statusFilter
-
+      book.title.toLowerCase().includes(q) ||
+      book.author.toLowerCase().includes(q) ||
+      book.isbn.includes(q)
+    const matchesCategory = categoryFilter === "all" || book.category === categoryFilter
+    const matchesStatus = statusFilter === "all" || book.status === statusFilter
     return matchesSearch && matchesCategory && matchesStatus
   })
 
-  const categories = [...new Set(allBooks.map((book) => book.category))]
+  if (authLoading) return null
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        title="Book Management"
-        description="Manage your library book inventory"
-      >
-        <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-          <DialogTrigger asChild>
-            <Button className="gap-2 bg-primary text-primary-foreground hover:bg-primary/90">
-              <Plus className="h-4 w-4" />
-              Add Book
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="bg-card border-border max-w-md">
-            <DialogHeader>
-              <DialogTitle className="text-foreground">Add New Book</DialogTitle>
-            </DialogHeader>
-            <form className="space-y-4" onSubmit={handleAddBook}>
-              <div className="space-y-2">
-                <Label htmlFor="title" className="text-foreground">
-                  Title
-                </Label>
-                <Input
-                  id="title"
-                  name="title"
-                  placeholder="Enter book title"
-                  required
-                  className="bg-input border-border text-foreground"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="author" className="text-foreground">
-                  Author
-                </Label>
-                <Input
-                  id="author"
-                  name="author"
-                  placeholder="Enter author name"
-                  required
-                  className="bg-input border-border text-foreground"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="isbn" className="text-foreground">
-                  ISBN
-                </Label>
-                <Input
-                  id="isbn"
-                  name="isbn"
-                  placeholder="Enter ISBN"
-                  required
-                  className="bg-input border-border text-foreground"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="category" className="text-foreground">
-                  Category
-                </Label>
-                <Input
-                  id="category"
-                  name="category"
-                  placeholder="Enter category"
-                  required
-                  className="bg-input border-border text-foreground"
-                />
-              </div>
-              <div className="flex justify-end gap-3 pt-4">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setIsAddDialogOpen(false)}
-                  className="border-border text-foreground"
-                  disabled={isSubmitting}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  type="submit"
-                  className="bg-primary text-primary-foreground hover:bg-primary/90"
-                  disabled={isSubmitting}
-                >
-                  {isSubmitting ? "Adding..." : "Add Book"}
-                </Button>
-              </div>
-            </form>
-          </DialogContent>
-        </Dialog>
+      <PageHeader title="Book Management" description="Manage your library book inventory">
+        <Button
+          variant="outline"
+          size="icon"
+          className="h-9 w-9 border-border"
+          onClick={fetchBooks}
+          disabled={isLoading}
+          aria-label="Refresh"
+        >
+          <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
+        </Button>
+        <Button
+          className="gap-2 bg-primary text-primary-foreground hover:bg-primary/90"
+          onClick={() => setIsAddDialogOpen(true)}
+        >
+          <Plus className="h-4 w-4" />
+          Add Book
+        </Button>
       </PageHeader>
 
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+      {/* Filters */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
-            placeholder="Search books..."
+            placeholder="Search by title, author, or ISBN…"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-10 bg-input border-border text-foreground placeholder:text-muted-foreground"
+            className="pl-9 bg-input border-border text-foreground placeholder:text-muted-foreground"
           />
         </div>
-        <div className="flex gap-3">
+        <div className="flex gap-2">
           <Select value={categoryFilter} onValueChange={setCategoryFilter}>
             <SelectTrigger className="w-40 bg-input border-border text-foreground">
               <SelectValue placeholder="Category" />
@@ -239,19 +162,77 @@ export default function BooksPage() {
               <SelectItem value="all">All Status</SelectItem>
               <SelectItem value="available">Available</SelectItem>
               <SelectItem value="issued">Issued</SelectItem>
-              <SelectItem value="reserved">Reserved</SelectItem>
             </SelectContent>
           </Select>
         </div>
       </div>
 
-      <DataTable books={filteredBooks} />
+      {/* Table */}
+      {isLoading ? (
+        <TableSkeleton rows={6} cols={6} />
+      ) : (
+        <DataTable books={filteredBooks} onRefresh={fetchBooks} />
+      )}
 
-      <div className="flex items-center justify-between text-sm text-muted-foreground">
-        <p>
+      {/* Footer count */}
+      {!isLoading && (
+        <p className="text-sm text-muted-foreground">
           Showing {filteredBooks.length} of {allBooks.length} books
         </p>
-      </div>
+      )}
+
+      {/* Add Book dialog */}
+      <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+        <DialogContent className="bg-card border-border max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-foreground">Add New Book</DialogTitle>
+            <DialogDescription className="text-muted-foreground">
+              Fill in the details to add a book to the catalogue.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleAddBook} className="space-y-4">
+            {(
+              [
+                { name: "title", label: "Title", placeholder: "e.g. The Great Gatsby" },
+                { name: "author", label: "Author", placeholder: "e.g. F. Scott Fitzgerald" },
+                { name: "isbn", label: "ISBN", placeholder: "e.g. 978-3-16-148410-0" },
+                { name: "category", label: "Category", placeholder: "e.g. Fiction" },
+              ] as const
+            ).map(({ name, label, placeholder }) => (
+              <div key={name} className="space-y-2">
+                <Label htmlFor={`add-${name}`} className="text-foreground">
+                  {label}
+                </Label>
+                <Input
+                  id={`add-${name}`}
+                  name={name}
+                  placeholder={placeholder}
+                  required
+                  className="bg-input border-border text-foreground placeholder:text-muted-foreground"
+                />
+              </div>
+            ))}
+            <DialogFooter className="pt-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setIsAddDialogOpen(false)}
+                disabled={isSubmitting}
+                className="border-border text-foreground"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                disabled={isSubmitting}
+                className="bg-primary text-primary-foreground hover:bg-primary/90"
+              >
+                {isSubmitting ? "Adding…" : "Add Book"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
