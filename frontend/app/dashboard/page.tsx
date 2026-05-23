@@ -57,10 +57,13 @@ export default function DashboardPage() {
         setRecentBooks(unique.slice(0, 6))
       } else {
         const err = booksRes.reason
-        const msg = err instanceof ApiError
-          ? `Books: ${err.message} (HTTP ${err.status})`
-          : `Books: ${String(err)}`
-        toast.error("Failed to load books", { description: msg })
+        const isOffline = err instanceof ApiError && err.status === 0
+        const msg = isOffline
+          ? "Backend is not running. Start the Spring Boot server and refresh."
+          : err instanceof ApiError
+          ? `${err.message} (HTTP ${err.status})`
+          : String(err)
+        if (!isOffline) toast.error("Failed to load books", { description: msg })
         setError(msg)
       }
 
@@ -70,14 +73,14 @@ export default function DashboardPage() {
         setTotalTransactions(Array.isArray(data) ? data.length : 0)
       } else {
         const err = txRes.reason
-        // 403 means the logged-in user doesn't have ADMIN/LIBRARIAN role —
-        // show 0 rather than an error toast since USER role is expected to 403 here
-        if (err instanceof ApiError && err.status === 403) {
+        // 403 = USER role — expected, show 0 silently
+        // 0   = network error — already shown via books error banner
+        if (err instanceof ApiError && (err.status === 403 || err.status === 0)) {
           setTotalTransactions(0)
         } else {
           const msg = err instanceof ApiError
-            ? `Transactions: ${err.message} (HTTP ${err.status})`
-            : `Transactions: ${String(err)}`
+            ? `${err.message} (HTTP ${err.status})`
+            : String(err)
           toast.error("Failed to load transactions", { description: msg })
         }
       }
@@ -115,7 +118,9 @@ export default function DashboardPage() {
         <div className="flex items-start gap-3 rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3">
           <AlertCircle className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-destructive">Failed to load data</p>
+            <p className="text-sm font-medium text-destructive">
+              {error.includes("not running") ? "Backend server is offline" : "Failed to load data"}
+            </p>
             <p className="text-xs text-destructive/80 mt-0.5">{error}</p>
           </div>
           <Button

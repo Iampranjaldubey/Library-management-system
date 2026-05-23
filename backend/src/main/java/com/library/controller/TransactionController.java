@@ -13,6 +13,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -27,6 +28,7 @@ public class TransactionController {
 
     @PostMapping("/issue")
     @PreAuthorize("hasAnyRole('ADMIN', 'LIBRARIAN')")
+    @Transactional
     @Operation(summary = "Issue a book to a user",
                description = """
                        Issues an available book to a user.
@@ -45,6 +47,7 @@ public class TransactionController {
 
     @PostMapping("/return")
     @PreAuthorize("hasAnyRole('ADMIN', 'LIBRARIAN')")
+    @Transactional
     @Operation(summary = "Return a book",
                description = """
                        Records the return of a book.
@@ -61,6 +64,7 @@ public class TransactionController {
 
     @GetMapping("/transactions")
     @PreAuthorize("hasAnyRole('ADMIN', 'LIBRARIAN')")
+    @Transactional(readOnly = true)
     @Operation(summary = "Get all transactions",
                description = "Returns all issue/return records. Requires ADMIN or LIBRARIAN role.")
     public ResponseEntity<ApiResponse<List<TransactionResponse>>> getAllTransactions() {
@@ -71,6 +75,7 @@ public class TransactionController {
 
     @GetMapping("/transactions/user/{userId}")
     @PreAuthorize("hasAnyRole('ADMIN', 'LIBRARIAN')")
+    @Transactional(readOnly = true)
     @Operation(summary = "Get transactions by user ID",
                description = "Returns all transactions for a specific user.")
     public ResponseEntity<ApiResponse<List<TransactionResponse>>> getTransactionsByUser(

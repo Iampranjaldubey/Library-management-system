@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react"
 import { transactionsApi, ApiError, type TransactionDto } from "@/lib/api"
 import { useProtectedRoute } from "@/hooks/use-protected-route"
+import { useAuth } from "@/context/auth-context"
 import { PageHeader } from "@/components/dashboard/page-header"
 import { FormSkeleton } from "@/components/dashboard/skeletons"
 import { Button } from "@/components/ui/button"
@@ -17,11 +18,13 @@ import {
 import { Label } from "@/components/ui/label"
 import { cn } from "@/lib/utils"
 import { format, differenceInCalendarDays, parseISO } from "date-fns"
-import { RotateCcw, Check, AlertTriangle, AlertCircle } from "lucide-react"
+import { RotateCcw, Check, AlertTriangle, AlertCircle, ShieldOff } from "lucide-react"
 import { toast } from "sonner"
 
 export default function ReturnBookPage() {
-  const { isLoading: authLoading } = useProtectedRoute()
+  const { isLoading: authLoading } = useProtectedRoute({ allowedRoles: ["ADMIN", "LIBRARIAN"] })
+  const { isAdmin, isLibrarian } = useAuth()
+  const canAccess = isAdmin || isLibrarian
 
   // Only show ACTIVE and OVERDUE transactions — backend already filters by status
   const [issuedBooks, setIssuedBooks] = useState<TransactionDto[]>([])
@@ -37,7 +40,6 @@ export default function ReturnBookPage() {
     try {
       const res = await transactionsApi.getAll()
       if (res.success && Array.isArray(res.data)) {
-        // Use backend status field — never recompute from dates on the client
         const active = res.data.filter(
           (t) => t.status === "ACTIVE" || t.status === "OVERDUE"
         )
@@ -56,8 +58,9 @@ export default function ReturnBookPage() {
   }, [])
 
   useEffect(() => {
-    if (!authLoading) fetchActiveTransactions()
-  }, [authLoading, fetchActiveTransactions])
+    if (!authLoading && canAccess) fetchActiveTransactions()
+    else if (!authLoading && !canAccess) setIsTxLoading(false)
+  }, [authLoading, canAccess, fetchActiveTransactions])
 
   const selectedIssue = issuedBooks.find(
     (b) => String(b.id) === selectedTransactionId
@@ -110,6 +113,25 @@ export default function ReturnBookPage() {
   }
 
   if (authLoading) return null
+
+  if (!canAccess) {
+    return (
+      <div className="space-y-6">
+        <PageHeader title="Return Book" description="Process book returns from library members" />
+        <div className="max-w-2xl rounded-xl border border-border bg-card p-8 flex flex-col items-center gap-4 text-center">
+          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-muted">
+            <ShieldOff className="h-6 w-6 text-muted-foreground" />
+          </div>
+          <div>
+            <p className="font-semibold text-foreground">Access restricted</p>
+            <p className="text-sm text-muted-foreground mt-1">
+              Processing returns requires ADMIN or LIBRARIAN role.
+            </p>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">

@@ -10,15 +10,11 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select"
 import { cn } from "@/lib/utils"
 import { format, parseISO } from "date-fns"
-import { BookPlus, Check } from "lucide-react"
+import { BookPlus, Check, ShieldOff } from "lucide-react"
 import { toast } from "sonner"
 
 interface AvailableBook {
@@ -29,8 +25,9 @@ interface AvailableBook {
 }
 
 export default function IssueBookPage() {
-  const { isLoading: authLoading } = useProtectedRoute()
-  const { user } = useAuth()
+  const { isLoading: authLoading } = useProtectedRoute({ allowedRoles: ["ADMIN", "LIBRARIAN"] })
+  const { user, isAdmin, isLibrarian } = useAuth()
+  const canAccess = isAdmin || isLibrarian
 
   const [availableBooks, setAvailableBooks] = useState<AvailableBook[]>([])
   const [isBooksLoading, setIsBooksLoading] = useState(true)
@@ -39,7 +36,6 @@ export default function IssueBookPage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isSuccess, setIsSuccess] = useState(false)
 
-  // Pre-fill userId from auth context
   useEffect(() => {
     if (user?.id) setUserId(String(user.id))
   }, [user])
@@ -50,10 +46,7 @@ export default function IssueBookPage() {
       const res = await booksApi.getAll(true)
       if (res.success && Array.isArray(res.data)) {
         const mapped = res.data.map((b: BookDto) => ({
-          id: b.id,
-          title: b.title,
-          author: b.author,
-          isbn: b.isbn,
+          id: b.id, title: b.title, author: b.author, isbn: b.isbn,
         }))
         setAvailableBooks(dedupeBooks(mapped))
       }
@@ -66,8 +59,9 @@ export default function IssueBookPage() {
   }, [])
 
   useEffect(() => {
-    if (!authLoading) fetchAvailableBooks()
-  }, [authLoading, fetchAvailableBooks])
+    if (!authLoading && canAccess) fetchAvailableBooks()
+    else if (!authLoading && !canAccess) setIsBooksLoading(false)
+  }, [authLoading, canAccess, fetchAvailableBooks])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -79,11 +73,8 @@ export default function IssueBookPage() {
     try {
       const res = await transactionsApi.issue(Number(selectedBookId), Number(userId))
       if (res.success) {
-        // Use parseISO — dueDate is "YYYY-MM-DD" (LocalDate, not LocalDateTime)
         const dueDate = format(parseISO(res.data.dueDate), "PPP")
-        toast.success("Book issued successfully", {
-          description: `Due date: ${dueDate}`,
-        })
+        toast.success("Book issued successfully", { description: `Due date: ${dueDate}` })
         setIsSuccess(true)
         setSelectedBookId("")
         fetchAvailableBooks()
@@ -105,17 +96,35 @@ export default function IssueBookPage() {
 
   if (authLoading) return null
 
+  // Role guard UI — shown if somehow a USER navigates here directly
+  if (!canAccess) {
+    return (
+      <div className="space-y-6">
+        <PageHeader title="Issue Book" description="Issue a book to a library member" />
+        <div className="max-w-2xl rounded-xl border border-border bg-card p-8 flex flex-col items-center gap-4 text-center">
+          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-muted">
+            <ShieldOff className="h-6 w-6 text-muted-foreground" />
+          </div>
+          <div>
+            <p className="font-semibold text-foreground">Access restricted</p>
+            <p className="text-sm text-muted-foreground mt-1">
+              Issuing books requires ADMIN or LIBRARIAN role.
+            </p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-6">
       <PageHeader title="Issue Book" description="Issue a book to a library member" />
-
       <div className="max-w-2xl">
         {isBooksLoading ? (
           <FormSkeleton fields={4} />
         ) : (
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="rounded-xl border border-border bg-card p-6 space-y-6">
-              {/* Card header */}
               <div className="flex items-center gap-3 pb-4 border-b border-border">
                 <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
                   <BookPlus className="h-5 w-5 text-primary" />
@@ -127,21 +136,15 @@ export default function IssueBookPage() {
               </div>
 
               <div className="grid gap-4 sm:grid-cols-2">
-                {/* Book selector */}
                 <div className="space-y-2 sm:col-span-2">
                   <Label className="text-foreground">Select Book</Label>
-                  <Select
-                    value={selectedBookId}
-                    onValueChange={setSelectedBookId}
-                  >
+                  <Select value={selectedBookId} onValueChange={setSelectedBookId}>
                     <SelectTrigger className="bg-input border-border text-foreground">
                       <SelectValue placeholder="Choose an available book" />
                     </SelectTrigger>
                     <SelectContent>
                       {availableBooks.length === 0 ? (
-                        <SelectItem value="none" disabled>
-                          No available books
-                        </SelectItem>
+                        <SelectItem value="none" disabled>No available books</SelectItem>
                       ) : (
                         availableBooks.map((book) => (
                           <SelectItem key={book.id} value={String(book.id)}>
@@ -153,11 +156,8 @@ export default function IssueBookPage() {
                   </Select>
                 </div>
 
-                {/* User ID */}
                 <div className="space-y-2 sm:col-span-2">
-                  <Label htmlFor="userId" className="text-foreground">
-                    User ID
-                  </Label>
+                  <Label htmlFor="userId" className="text-foreground">User ID</Label>
                   <Input
                     id="userId"
                     type="number"
@@ -172,7 +172,6 @@ export default function IssueBookPage() {
                   </p>
                 </div>
 
-                {/* Issue date (read-only) */}
                 <div className="space-y-2">
                   <Label className="text-foreground">Issue Date</Label>
                   <Input
@@ -182,7 +181,6 @@ export default function IssueBookPage() {
                   />
                 </div>
 
-                {/* Due date (read-only) */}
                 <div className="space-y-2">
                   <Label className="text-foreground">Due Date</Label>
                   <Input
@@ -213,16 +211,9 @@ export default function IssueBookPage() {
                   isSuccess && "bg-primary"
                 )}
               >
-                {isSubmitting ? (
-                  "Issuing…"
-                ) : isSuccess ? (
-                  <>
-                    <Check className="h-4 w-4" />
-                    Book Issued
-                  </>
-                ) : (
-                  "Issue Book"
-                )}
+                {isSubmitting ? "Issuing…" : isSuccess ? (
+                  <><Check className="h-4 w-4" />Book Issued</>
+                ) : "Issue Book"}
               </Button>
             </div>
           </form>

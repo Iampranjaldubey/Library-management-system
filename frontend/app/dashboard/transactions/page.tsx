@@ -57,7 +57,7 @@ const STATUS_CONFIG: Record<
 }
 
 export default function TransactionsPage() {
-  const { isLoading: authLoading } = useProtectedRoute()
+  const { isLoading: authLoading } = useProtectedRoute({ allowedRoles: ["ADMIN", "LIBRARIAN"] })
 
   const [transactions, setTransactions] = useState<TransactionDto[]>([])
   const [isLoading, setIsLoading] = useState(true)

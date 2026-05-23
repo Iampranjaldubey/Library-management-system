@@ -8,6 +8,7 @@ import { useAuth } from "@/context/auth-context"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Library, LogOut, ChevronRight } from "lucide-react"
 import { toast } from "sonner"
+import type { Role } from "@/lib/auth"
 
 export function Sidebar() {
   const pathname = usePathname()
@@ -21,6 +22,12 @@ export function Sidebar() {
   const initials = user?.name
     ? user.name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2)
     : "LO"
+
+  // Filter nav items by the current user's role
+  const visibleNav = navigation.filter((item) => {
+    if (!item.allowedRoles) return true
+    return user?.role && item.allowedRoles.includes(user.role as Role)
+  })
 
   return (
     <aside className="fixed left-0 top-0 z-40 flex h-screen w-64 flex-col glass-sidebar">
@@ -44,7 +51,7 @@ export function Sidebar() {
         <p className="px-3 py-2 text-[10px] font-semibold uppercase tracking-widest text-sidebar-foreground/30">
           Menu
         </p>
-        {navigation.map((item) => {
+        {visibleNav.map((item) => {
           const isActive = pathname === item.href
           return (
             <Link
@@ -64,9 +71,7 @@ export function Sidebar() {
                 )}
               />
               <span className="flex-1">{item.name}</span>
-              {isActive && (
-                <ChevronRight className="h-3 w-3 text-primary/60" />
-              )}
+              {isActive && <ChevronRight className="h-3 w-3 text-primary/60" />}
             </Link>
           )
         })}
@@ -83,7 +88,9 @@ export function Sidebar() {
             </Avatar>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium text-sidebar-foreground truncate">{user.name}</p>
-              <p className="text-xs text-sidebar-foreground/40 truncate capitalize">{user.role?.toLowerCase()}</p>
+              <p className="text-xs text-sidebar-foreground/40 truncate capitalize">
+                {user.role?.toLowerCase()}
+              </p>
             </div>
           </div>
         )}

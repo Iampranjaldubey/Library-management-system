@@ -73,7 +73,8 @@ public class TransactionServiceImpl implements TransactionService {
     @Override
     @Transactional
     public TransactionResponse returnBook(ReturnRequest request) {
-        Transaction tx = transactionRepository.findById(request.getTransactionId())
+        // Use JOIN FETCH so user and book are loaded within this transaction
+        Transaction tx = transactionRepository.findByIdWithDetails(request.getTransactionId())
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Transaction not found with id: " + request.getTransactionId()));
 
@@ -112,14 +113,17 @@ public class TransactionServiceImpl implements TransactionService {
         if (!userRepository.existsById(userId)) {
             throw new ResourceNotFoundException("User not found with id: " + userId);
         }
-        return transactionRepository.findByUserId(userId)
+        // Use JOIN FETCH query to avoid LazyInitializationException
+        return transactionRepository.findByUserIdWithDetails(userId)
                 .stream().map(this::toResponse).toList();
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<TransactionResponse> getAllTransactions() {
-        return transactionRepository.findAll()
+        // Use JOIN FETCH query to avoid LazyInitializationException
+        // (user and book are LAZY — plain findAll() closes the session before mapping)
+        return transactionRepository.findAllWithDetails()
                 .stream().map(this::toResponse).toList();
     }
 

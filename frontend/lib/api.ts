@@ -118,14 +118,12 @@ export async function apiFetch<T = unknown>(
   try {
     response = await fetch(url, { ...options, headers })
   } catch (networkErr: unknown) {
-    // fetch() itself threw — network down, DNS failure, CORS preflight blocked, etc.
-    const msg =
-      networkErr instanceof Error ? networkErr.message : "Network error"
+    const msg = networkErr instanceof Error ? networkErr.message : "Network error"
     if (isDev) {
       console.error(`[API] Network failure for ${method} ${url}:`, networkErr)
     }
     throw new ApiError(
-      `Cannot reach the server. Check that the backend is running on ${baseUrl}.`,
+      "Cannot reach the server. Make sure the backend is running on " + baseUrl,
       0,
       { originalMessage: msg }
     )
@@ -163,9 +161,14 @@ export async function apiFetch<T = unknown>(
 
     // 401 — token expired or invalid: clear session and redirect
     if (response.status === 401) {
-      clearSession()
+      // Only clear session if we actually had a token (not a missing-token 401)
       if (typeof window !== "undefined") {
-        window.location.href = "/login"
+        const hadToken = !!localStorage.getItem("token")
+        clearSession()
+        if (hadToken) {
+          // Hard redirect so the auth context re-initialises cleanly
+          window.location.href = "/login"
+        }
       }
       throw new ApiError("Session expired. Please sign in again.", 401, body)
     }

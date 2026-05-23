@@ -11,6 +11,7 @@ import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Library, LogOut, Menu, ChevronRight } from "lucide-react"
 import { toast } from "sonner"
+import type { Role } from "@/lib/auth"
 
 export function MobileNav() {
   const [open, setOpen] = useState(false)
@@ -26,6 +27,12 @@ export function MobileNav() {
   const initials = user?.name
     ? user.name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2)
     : "LO"
+
+  // Filter nav items by the current user's role
+  const visibleNav = navigation.filter((item) => {
+    if (!item.allowedRoles) return true
+    return user?.role && item.allowedRoles.includes(user.role as Role)
+  })
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
@@ -60,7 +67,7 @@ export function MobileNav() {
           <p className="px-3 py-2 text-[10px] font-semibold uppercase tracking-widest text-sidebar-foreground/30">
             Menu
           </p>
-          {navigation.map((item) => {
+          {visibleNav.map((item) => {
             const isActive = pathname === item.href
             return (
               <Link
@@ -77,7 +84,9 @@ export function MobileNav() {
                 <item.icon
                   className={cn(
                     "h-4 w-4 shrink-0",
-                    isActive ? "text-primary" : "text-sidebar-foreground/40 group-hover:text-sidebar-foreground"
+                    isActive
+                      ? "text-primary"
+                      : "text-sidebar-foreground/40 group-hover:text-sidebar-foreground"
                   )}
                 />
                 <span className="flex-1">{item.name}</span>
@@ -98,7 +107,9 @@ export function MobileNav() {
               </Avatar>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-sidebar-foreground truncate">{user.name}</p>
-                <p className="text-xs text-sidebar-foreground/40 truncate capitalize">{user.role?.toLowerCase()}</p>
+                <p className="text-xs text-sidebar-foreground/40 truncate capitalize">
+                  {user.role?.toLowerCase()}
+                </p>
               </div>
             </div>
           )}
