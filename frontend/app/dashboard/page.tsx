@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react"
 import { booksApi, transactionsApi, dedupeBooks, ApiError, type BookDto } from "@/lib/api"
 import { useProtectedRoute } from "@/hooks/use-protected-route"
+import { useAuth } from "@/context/auth-context"
 import { PageHeader } from "@/components/dashboard/page-header"
 import { StatsCard } from "@/components/dashboard/stats-card"
 import { DataTable, type Book } from "@/components/dashboard/data-table"
@@ -26,6 +27,9 @@ function mapBookDto(b: BookDto): Book {
 
 export default function DashboardPage() {
   const { isLoading: authLoading } = useProtectedRoute()
+  const { isAdmin, isLibrarian } = useAuth()
+  // USER role has no access to transactions — never fetch it for them
+  const canViewTransactions = isAdmin || isLibrarian
 
   const [recentBooks, setRecentBooks] = useState<Book[]>([])
   const [totalBooks, setTotalBooks] = useState(0)
@@ -39,17 +43,19 @@ export default function DashboardPage() {
     setIsLoading(true)
     setError(null)
     try {
-      // Run both requests in parallel — if one fails the other still resolves
-      const [booksRes, txRes] = await Promise.allSettled([
+      // Always fetch books — all authenticated roles can read them
+      // Only fetch transactions for ADMIN / LIBRARIAN — USER role has no access
+      const requests: [Promise<unknown>, Promise<unknown>] = [
         booksApi.getAll(),
-        transactionsApi.getAll(),
-      ])
+        canViewTransactions ? transactionsApi.getAll() : Promise.resolve(null),
+      ]
+
+      const [booksRes, txRes] = await Promise.allSettled(requests)
 
       // ── Books ──────────────────────────────────────────────────────────────
       if (booksRes.status === "fulfilled") {
-        const raw = Array.isArray(booksRes.value.data)
-          ? booksRes.value.data.map(mapBookDto)
-          : []
+        const value = booksRes.value as Awaited<ReturnType<typeof booksApi.getAll>>
+        const raw = Array.isArray(value?.data) ? value.data.map(mapBookDto) : []
         const unique = dedupeBooks(raw)
         setTotalBooks(unique.length)
         setIssuedBooks(unique.filter((b) => b.status === "issued").length)
@@ -67,17 +73,17 @@ export default function DashboardPage() {
         setError(msg)
       }
 
-      // ── Transactions ───────────────────────────────────────────────────────
-      if (txRes.status === "fulfilled") {
-        const data = txRes.value.data
-        setTotalTransactions(Array.isArray(data) ? data.length : 0)
+      // ── Transactions (ADMIN / LIBRARIAN only) ──────────────────────────────
+      if (!canViewTransactions) {
+        // USER role — skip silently, stat card is hidden for them
+        setTotalTransactions(0)
+      } else if (txRes.status === "fulfilled") {
+        const value = txRes.value as Awaited<ReturnType<typeof transactionsApi.getAll>>
+        setTotalTransactions(Array.isArray(value?.data) ? value.data.length : 0)
       } else {
         const err = txRes.reason
-        // 403 = USER role — expected, show 0 silently
-        // 0   = network error — already shown via books error banner
-        if (err instanceof ApiError && (err.status === 403 || err.status === 0)) {
-          setTotalTransactions(0)
-        } else {
+        // Network error is already surfaced by the books banner — skip toast
+        if (!(err instanceof ApiError && err.status === 0)) {
           const msg = err instanceof ApiError
             ? `${err.message} (HTTP ${err.status})`
             : String(err)
@@ -87,7 +93,7 @@ export default function DashboardPage() {
     } finally {
       setIsLoading(false)
     }
-  }, [])
+  }, [canViewTransactions])
 
   useEffect(() => {
     if (!authLoading) fetchData()
@@ -137,7 +143,7 @@ export default function DashboardPage() {
       {/* Stats grid */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {isLoading ? (
-          Array.from({ length: 4 }).map((_, i) => <StatsCardSkeleton key={i} />)
+          Array.from({ length: canViewTransactions ? 4 : 3 }).map((_, i) => <StatsCardSkeleton key={i} />)
         ) : (
           <>
             <StatsCard
@@ -158,12 +164,14 @@ export default function DashboardPage() {
               icon={BookX}
               description="currently out"
             />
-            <StatsCard
-              title="Transactions"
-              value={totalTransactions}
-              icon={ArrowLeftRight}
-              description="all time"
-            />
+            {canViewTransactions && (
+              <StatsCard
+                title="Transactions"
+                value={totalTransactions}
+                icon={ArrowLeftRight}
+                description="all time"
+              />
+            )}
           </>
         )}
       </div>

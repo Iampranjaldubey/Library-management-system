@@ -1,108 +1,149 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
-import { transactionsApi, ApiError, type TransactionDto } from "@/lib/api"
+import { useEffect } from "react"
+import { motion, AnimatePresence } from "framer-motion"
 import { useProtectedRoute } from "@/hooks/use-protected-route"
+import { useTransactions } from "@/hooks/use-transactions"
 import { PageHeader } from "@/components/dashboard/page-header"
-import { TableSkeleton } from "@/components/dashboard/skeletons"
-import { Badge } from "@/components/ui/badge"
+import { TransactionsFilters } from "@/components/transactions/transactions-filters"
+import { TransactionsTable, TransactionsTableSkeleton } from "@/components/transactions/transactions-table"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
+import { Skeleton } from "@/components/ui/skeleton"
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
-import {
-  Empty,
-  EmptyHeader,
-  EmptyMedia,
-  EmptyTitle,
-  EmptyDescription,
-} from "@/components/ui/empty"
-import { RefreshCw, Search, ArrowLeftRight, AlertCircle } from "lucide-react"
-import { format, parseISO } from "date-fns"
-import { toast } from "sonner"
+  AlertCircle, RefreshCw, ArrowLeftRight,
+  BookOpen, RotateCcw, AlertTriangle,
+} from "lucide-react"
+import { cn } from "@/lib/utils"
 
-// Backend status values — use these directly instead of recomputing
-type BackendStatus = TransactionDto["status"]
-type StatusFilter = "all" | BackendStatus
+// ─── Stat card ────────────────────────────────────────────────────────────────
 
-const STATUS_CONFIG: Record<
-  BackendStatus,
-  { label: string; className: string }
-> = {
-  ACTIVE: {
-    label: "Active",
-    className: "bg-primary/15 text-primary border-primary/20",
-  },
-  RETURNED: {
-    label: "Returned",
-    className: "bg-muted text-muted-foreground border-border",
-  },
-  OVERDUE: {
-    label: "Overdue",
-    className: "bg-destructive/15 text-destructive border-destructive/20",
-  },
+function StatCard({
+  icon: Icon,
+  label,
+  value,
+  variant = "default",
+}: {
+  icon: React.ElementType
+  label: string
+  value: number
+  variant?: "default" | "success" | "warning"
+}) {
+  return (
+    <div
+      className={cn(
+        "flex items-center gap-3 rounded-xl border px-4 py-3",
+        "bg-card/60 backdrop-blur-sm transition-colors",
+        variant === "warning"
+          ? "border-destructive/20 hover:border-destructive/30"
+          : variant === "success"
+          ? "border-emerald-500/20 hover:border-emerald-500/30"
+          : "border-border hover:border-primary/20"
+      )}
+    >
+      <div
+        className={cn(
+          "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg",
+          variant === "warning"
+            ? "bg-destructive/10"
+            : variant === "success"
+            ? "bg-emerald-500/10"
+            : "bg-primary/10"
+        )}
+      >
+        <Icon
+          className={cn(
+            "h-4 w-4",
+            variant === "warning"
+              ? "text-destructive"
+              : variant === "success"
+              ? "text-emerald-500"
+              : "text-primary"
+          )}
+        />
+      </div>
+      <div>
+        <p className="text-lg font-bold text-foreground tabular-nums leading-none">
+          {value}
+        </p>
+        <p className="text-[11px] text-muted-foreground mt-0.5">{label}</p>
+      </div>
+    </div>
+  )
 }
+
+function StatCardSkeleton() {
+  return (
+    <div className="flex items-center gap-3 rounded-xl border border-border bg-card/60 px-4 py-3">
+      <Skeleton className="h-8 w-8 rounded-lg shrink-0" />
+      <div className="space-y-1.5">
+        <Skeleton className="h-5 w-8" />
+        <Skeleton className="h-3 w-16" />
+      </div>
+    </div>
+  )
+}
+
+// ─── Error banner ─────────────────────────────────────────────────────────────
+
+function ErrorBanner({ message, onRetry }: { message: string; onRetry: () => void }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, height: 0 }}
+      animate={{ opacity: 1, height: "auto" }}
+      exit={{ opacity: 0, height: 0 }}
+      transition={{ duration: 0.2 }}
+      className="overflow-hidden"
+    >
+      <div className="flex items-start gap-3 rounded-xl border border-destructive/30 bg-destructive/8 px-4 py-3.5">
+        <AlertCircle className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-semibold text-destructive">Failed to load transactions</p>
+          <p className="text-xs text-destructive/70 mt-0.5">{message}</p>
+        </div>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={onRetry}
+          className="text-destructive hover:text-destructive hover:bg-destructive/10 h-7 px-2 text-xs shrink-0"
+        >
+          Retry
+        </Button>
+      </div>
+    </motion.div>
+  )
+}
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function TransactionsPage() {
   const { isLoading: authLoading } = useProtectedRoute({ allowedRoles: ["ADMIN", "LIBRARIAN"] })
 
-  const [transactions, setTransactions] = useState<TransactionDto[]>([])
-  const [isLoading, setIsLoading] = useState(true)
-  const [fetchError, setFetchError] = useState<string | null>(null)
-  const [searchQuery, setSearchQuery] = useState("")
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all")
-
-  const fetchTransactions = useCallback(async () => {
-    setIsLoading(true)
-    setFetchError(null)
-    try {
-      const res = await transactionsApi.getAll()
-      if (res.success && Array.isArray(res.data)) {
-        setTransactions(res.data)
-      }
-    } catch (err) {
-      const msg =
-        err instanceof ApiError
-          ? `${err.message} (HTTP ${err.status})`
-          : String(err)
-      setFetchError(msg)
-      toast.error("Failed to load transactions", { description: msg })
-    } finally {
-      setIsLoading(false)
-    }
-  }, [])
+  const {
+    filtered,
+    isLoading,
+    fetchError,
+    counts,
+    searchQuery,
+    setSearchQuery,
+    statusFilter,
+    setStatusFilter,
+    sortField,
+    sortDir,
+    toggleSort,
+    fetchTransactions,
+  } = useTransactions()
 
   useEffect(() => {
     if (!authLoading) fetchTransactions()
   }, [authLoading, fetchTransactions])
 
-  const filtered = transactions.filter((tx) => {
-    const q = searchQuery.toLowerCase()
-    const matchesSearch =
-      tx.bookTitle.toLowerCase().includes(q) ||
-      tx.userName.toLowerCase().includes(q)
-    const matchesStatus =
-      statusFilter === "all" || tx.status === statusFilter
-    return matchesSearch && matchesStatus
-  })
-
   if (authLoading) return null
+
+  const isFiltered = searchQuery.trim() !== "" || statusFilter !== "all"
 
   return (
     <div className="space-y-6">
+      {/* ── Page header ── */}
       <PageHeader
         title="Transactions"
         description="All book issue and return records"
@@ -113,168 +154,83 @@ export default function TransactionsPage() {
           className="h-9 w-9 border-border"
           onClick={fetchTransactions}
           disabled={isLoading}
-          aria-label="Refresh"
+          aria-label="Refresh transactions"
         >
-          <RefreshCw
-            className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`}
-          />
+          <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
         </Button>
       </PageHeader>
 
-      {/* Error banner */}
-      {fetchError && !isLoading && (
-        <div className="flex items-start gap-3 rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3">
-          <AlertCircle className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-destructive">
-              Failed to load transactions
-            </p>
-            <p className="text-xs text-destructive/80 mt-0.5">{fetchError}</p>
-          </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="text-destructive hover:text-destructive hover:bg-destructive/10 h-7 px-2 text-xs shrink-0"
-            onClick={fetchTransactions}
-          >
-            Retry
-          </Button>
-        </div>
-      )}
-
-      {/* Filters */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-        <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            placeholder="Search by book or member…"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-9 bg-input border-border text-foreground placeholder:text-muted-foreground"
-          />
-        </div>
-        <Select
-          value={statusFilter}
-          onValueChange={(v) => setStatusFilter(v as StatusFilter)}
-        >
-          <SelectTrigger className="w-40 bg-input border-border text-foreground">
-            <SelectValue placeholder="Status" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Status</SelectItem>
-            <SelectItem value="ACTIVE">Active</SelectItem>
-            <SelectItem value="RETURNED">Returned</SelectItem>
-            <SelectItem value="OVERDUE">Overdue</SelectItem>
-          </SelectContent>
-        </Select>
+      {/* ── Stats strip ── */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {isLoading ? (
+          Array.from({ length: 4 }).map((_, i) => <StatCardSkeleton key={i} />)
+        ) : (
+          <>
+            <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0 }}>
+              <StatCard icon={ArrowLeftRight} label="Total" value={counts.total} />
+            </motion.div>
+            <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}>
+              <StatCard icon={BookOpen} label="Active" value={counts.active} />
+            </motion.div>
+            <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
+              <StatCard icon={RotateCcw} label="Returned" value={counts.returned} variant="success" />
+            </motion.div>
+            <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
+              <StatCard icon={AlertTriangle} label="Overdue" value={counts.overdue} variant="warning" />
+            </motion.div>
+          </>
+        )}
       </div>
 
-      {/* Table */}
-      {isLoading ? (
-        <TableSkeleton rows={6} cols={8} />
-      ) : filtered.length === 0 ? (
-        <div className="rounded-xl border border-border bg-card">
-          <Empty className="py-16">
-            <EmptyHeader>
-              <EmptyMedia variant="icon">
-                <ArrowLeftRight />
-              </EmptyMedia>
-              <EmptyTitle>No transactions found</EmptyTitle>
-              <EmptyDescription>
-                {searchQuery || statusFilter !== "all"
-                  ? "No transactions match your current filters."
-                  : "No transactions have been recorded yet."}
-              </EmptyDescription>
-            </EmptyHeader>
-          </Empty>
-        </div>
-      ) : (
-        <div className="rounded-xl border border-border bg-card overflow-hidden">
-          <Table>
-            <TableHeader>
-              <TableRow className="border-border hover:bg-transparent bg-muted/20">
-                {[
-                  "ID",
-                  "Book",
-                  "Member",
-                  "Issue Date",
-                  "Due Date",
-                  "Return Date",
-                  "Status",
-                  "Fine",
-                ].map((h, i) => (
-                  <TableHead
-                    key={h}
-                    className={`text-muted-foreground font-medium text-xs uppercase tracking-wide${
-                      i >= 3 && i <= 5
-                        ? i <= 4
-                          ? " hidden md:table-cell"
-                          : " hidden lg:table-cell"
-                        : i === 7
-                        ? " hidden lg:table-cell"
-                        : ""
-                    }`}
-                  >
-                    {h}
-                  </TableHead>
-                ))}
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filtered.map((tx) => {
-                const cfg = STATUS_CONFIG[tx.status] ?? STATUS_CONFIG.ACTIVE
-                return (
-                  <TableRow
-                    key={tx.id}
-                    className="border-border hover:bg-muted/30 transition-colors"
-                  >
-                    <TableCell className="font-mono text-xs text-muted-foreground">
-                      #{tx.id}
-                    </TableCell>
-                    <TableCell className="font-medium text-foreground max-w-[160px] truncate">
-                      {tx.bookTitle}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {tx.userName}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground hidden md:table-cell">
-                      {format(parseISO(tx.issueDate), "dd MMM yyyy")}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground hidden md:table-cell">
-                      {format(parseISO(tx.dueDate), "dd MMM yyyy")}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground hidden lg:table-cell">
-                      {tx.returnDate
-                        ? format(parseISO(tx.returnDate), "dd MMM yyyy")
-                        : "—"}
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className={cfg.className}>
-                        {cfg.label}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-muted-foreground hidden lg:table-cell">
-                      {tx.fine && tx.fine > 0 ? (
-                        <span className="text-destructive font-medium">
-                          ₹{tx.fine.toFixed(2)}
-                        </span>
-                      ) : (
-                        "—"
-                      )}
-                    </TableCell>
-                  </TableRow>
-                )
-              })}
-            </TableBody>
-          </Table>
-        </div>
-      )}
+      {/* ── Error banner ── */}
+      <AnimatePresence>
+        {fetchError && !isLoading && (
+          <ErrorBanner message={fetchError} onRetry={fetchTransactions} />
+        )}
+      </AnimatePresence>
 
-      {!isLoading && (
-        <p className="text-sm text-muted-foreground">
-          Showing {filtered.length} of {transactions.length} transactions
-        </p>
-      )}
+      {/* ── Filters ── */}
+      <TransactionsFilters
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
+        statusFilter={statusFilter}
+        onStatusChange={setStatusFilter}
+        resultCount={filtered.length}
+        totalCount={counts.total}
+        disabled={isLoading}
+      />
+
+      {/* ── Table / skeleton ── */}
+      <AnimatePresence mode="wait">
+        {isLoading ? (
+          <motion.div
+            key="skeleton"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
+          >
+            <TransactionsTableSkeleton />
+          </motion.div>
+        ) : (
+          <motion.div
+            key="table"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
+          >
+            <TransactionsTable
+              transactions={filtered}
+              totalCount={counts.total}
+              sortField={sortField}
+              sortDir={sortDir}
+              onSort={toggleSort}
+              isFiltered={isFiltered}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }

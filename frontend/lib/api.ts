@@ -311,3 +311,28 @@ export const transactionsApi = {
   getByUser: (userId: number) =>
     apiFetch<TransactionDto[]>(`/transactions/user/${userId}`),
 }
+
+// ─── Users API ────────────────────────────────────────────────────────────────
+// NOTE: The backend does not currently expose a GET /users endpoint.
+// These methods are stubs ready for when the endpoint is added.
+
+export interface UserDto {
+  id: number
+  name: string
+  email: string
+  role: string
+}
+
+export const usersApi = {
+  /** Validate a user exists by fetching their active transactions.
+   *  Returns null if the user is not found (404). */
+  validateById: async (userId: number): Promise<boolean> => {
+    try {
+      await apiFetch(`/transactions/user/${userId}`)
+      return true
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 404) return false
+      throw err
+    }
+  },
+}

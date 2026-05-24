@@ -62,10 +62,16 @@ public class SecurityConfig {
             .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers(PUBLIC_URLS).permitAll()
-                // Only ADMIN & LIBRARIAN can add books
+                // Only ADMIN & LIBRARIAN can manage books (write)
                 .requestMatchers(HttpMethod.POST, "/books").hasAnyRole("ADMIN", "LIBRARIAN")
-                // Issue/Return require LIBRARIAN or ADMIN
+                .requestMatchers(HttpMethod.PUT, "/books/**").hasAnyRole("ADMIN", "LIBRARIAN")
+                .requestMatchers(HttpMethod.DELETE, "/books/**").hasAnyRole("ADMIN", "LIBRARIAN")
+                // Issue / Return — ADMIN & LIBRARIAN only
                 .requestMatchers("/issue", "/return").hasAnyRole("ADMIN", "LIBRARIAN")
+                // All transaction endpoints — ADMIN & LIBRARIAN only
+                // Declared here at the filter level so Spring returns 403 (not 500)
+                // before method-security even fires
+                .requestMatchers("/transactions/**").hasAnyRole("ADMIN", "LIBRARIAN")
                 // GET /books is open to all authenticated users
                 .requestMatchers(HttpMethod.GET, "/books/**").authenticated()
                 .anyRequest().authenticated()
