@@ -1,6 +1,7 @@
 "use client"
 
 import { motion, AnimatePresence } from "framer-motion"
+import { modalContent } from "@/lib/animations"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { BookStatusBadge } from "./book-status-badge"
@@ -36,44 +37,44 @@ function DetailRow({ icon: Icon, label, value }: {
 export function BookDetailModal({ book, open, canEdit, onClose, onEdit }: BookDetailModalProps) {
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="bg-card border-border max-w-md p-0 overflow-hidden">
+      <DialogContent className="bg-card border-border w-full max-w-[calc(100vw-2rem)] sm:max-w-md p-0 overflow-hidden">
         <AnimatePresence>
           {book && (
             <motion.div
-              initial={{ opacity: 0, scale: 0.97 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.97 }}
-              transition={{ duration: 0.18, ease: "easeOut" }}
+              variants={modalContent}
+              initial="initial"
+              animate="animate"
+              exit="exit"
             >
               {/* Header band */}
-              <div className="relative bg-gradient-to-br from-primary/10 via-primary/5 to-transparent px-6 pt-6 pb-5 border-b border-border">
-                <div className="flex items-start gap-4">
-                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary/15 border border-primary/20">
-                    <BookOpen className="h-6 w-6 text-primary" />
+              <div className="relative bg-gradient-to-br from-primary/10 via-primary/5 to-transparent px-5 sm:px-6 pt-5 sm:pt-6 pb-4 sm:pb-5 border-b border-border">
+                <div className="flex items-start gap-3 sm:gap-4">
+                  <div className="flex h-10 w-10 sm:h-12 sm:w-12 shrink-0 items-center justify-center rounded-xl bg-primary/15 border border-primary/20">
+                    <BookOpen className="h-5 w-5 sm:h-6 sm:w-6 text-primary" />
                   </div>
                   <div className="flex-1 min-w-0">
                     <DialogHeader>
-                      <DialogTitle className="text-base font-bold text-foreground leading-snug line-clamp-2">
+                      <DialogTitle className="text-sm sm:text-base font-bold text-foreground leading-snug line-clamp-2">
                         {book.title}
                       </DialogTitle>
                     </DialogHeader>
-                    <p className="text-sm text-muted-foreground mt-0.5">{book.author}</p>
+                    <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">{book.author}</p>
                   </div>
                 </div>
-                <div className="mt-4">
+                <div className="mt-3 sm:mt-4">
                   <BookStatusBadge available={book.available} />
                 </div>
               </div>
 
               {/* Details */}
-              <div className="px-6 py-2">
+              <div className="px-5 sm:px-6 py-1 sm:py-2">
                 <DetailRow icon={Hash} label="ISBN" value={book.isbn} />
                 <DetailRow icon={Tag} label="Category" value={book.category} />
                 <DetailRow icon={User} label="Author" value={book.author} />
               </div>
 
               {/* Footer */}
-              <div className="flex items-center justify-end gap-2 px-6 py-4 border-t border-border bg-muted/20">
+              <div className="flex items-center justify-end gap-2 px-5 sm:px-6 py-3 sm:py-4 border-t border-border bg-muted/20">
                 <Button variant="outline" size="sm" className="border-border" onClick={onClose}>
                   Close
                 </Button>

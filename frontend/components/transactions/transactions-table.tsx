@@ -3,8 +3,10 @@
 import { useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { cn } from "@/lib/utils"
+import { tableRow, cardEntrance, cardHover } from "@/lib/animations"
 import { TransactionStatusBadge } from "@/components/transactions/transaction-status-badge"
 import { TransactionDetailModal } from "@/components/transactions/transaction-detail-modal"
+import { EmptyStateNoTransactions } from "@/components/ui/empty-state"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Button } from "@/components/ui/button"
 import {
@@ -17,7 +19,7 @@ import {
 } from "@/components/ui/table"
 import {
   ArrowUpDown, ArrowUp, ArrowDown,
-  ArrowLeftRight, BookOpen, User,
+  BookOpen, User,
   Calendar, IndianRupee, ChevronLeft,
   ChevronRight, Eye,
 } from "lucide-react"
@@ -62,40 +64,73 @@ function SortIcon({ field, activeField, dir }: { field: string; activeField: Sor
 
 // ─── Table skeleton ───────────────────────────────────────────────────────────
 
+// Column widths mirror the real table for a pixel-accurate placeholder
+const COL_WIDTHS = [48, 180, 120, 100, 100, 100, 80, 56, 32]
+
 export function TransactionsTableSkeleton() {
   return (
     <div className="space-y-3">
-      {/* Desktop skeleton */}
+      {/* ── Desktop skeleton ── */}
       <div className="hidden md:block rounded-2xl border border-border bg-card/60 backdrop-blur-sm overflow-hidden">
-        <div className="px-4 py-3 border-b border-border bg-muted/20 flex gap-4">
-          {[60, 180, 120, 100, 100, 100, 80, 60].map((w, i) => (
-            <Skeleton key={i} className="h-3 rounded" style={{ width: w }} />
+        {/* Header row */}
+        <div className="px-4 py-3 border-b border-border bg-muted/20 flex gap-4 items-center">
+          {COL_WIDTHS.map((w, i) => (
+            <Skeleton key={i} className="h-3 rounded shrink-0" style={{ width: w }} />
           ))}
         </div>
-        {Array.from({ length: 6 }).map((_, i) => (
-          <div key={i} className="px-4 py-3.5 border-b border-border/50 last:border-0 flex gap-4 items-center">
-            {[60, 180, 120, 100, 100, 100, 80, 60].map((w, j) => (
-              <Skeleton key={j} className="h-4 rounded" style={{ width: w }} />
+
+        {/* Data rows — staggered via CSS animation-delay */}
+        {Array.from({ length: 7 }).map((_, row) => (
+          <div
+            key={row}
+            className="px-4 py-3.5 border-b border-border/50 last:border-0 flex gap-4 items-center"
+            style={{ animationDelay: `${row * 50}ms` }}
+          >
+            {COL_WIDTHS.map((w, col) => (
+              <Skeleton
+                key={col}
+                className="h-4 rounded shrink-0"
+                style={{
+                  width: w,
+                  // Vary the last few cols slightly for a natural look
+                  opacity: col >= COL_WIDTHS.length - 2 ? 0.6 : 1,
+                }}
+              />
             ))}
           </div>
         ))}
       </div>
 
-      {/* Mobile skeleton */}
+      {/* ── Mobile skeleton ── */}
       <div className="md:hidden space-y-3">
         {Array.from({ length: 4 }).map((_, i) => (
-          <div key={i} className="rounded-2xl border border-border bg-card/60 p-4 space-y-3">
+          <div
+            key={i}
+            className="rounded-2xl border border-border bg-card/60 backdrop-blur-sm p-4 space-y-3 overflow-hidden"
+          >
+            {/* Top: book title + status badge */}
             <div className="flex items-start justify-between gap-3">
-              <div className="space-y-1.5 flex-1">
-                <Skeleton className="h-4 w-40" />
-                <Skeleton className="h-3 w-28" />
+              <div className="flex items-start gap-2.5 flex-1">
+                <Skeleton className="h-8 w-8 rounded-lg shrink-0" />
+                <div className="flex-1 space-y-1.5">
+                  <Skeleton className="h-4 w-40" />
+                  <Skeleton className="h-3 w-24" />
+                </div>
               </div>
-              <Skeleton className="h-6 w-16 rounded-full" />
+              <Skeleton className="h-6 w-16 rounded-full shrink-0" />
             </div>
-            <div className="grid grid-cols-2 gap-2">
+
+            {/* Date grid */}
+            <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
               {Array.from({ length: 4 }).map((_, j) => (
-                <Skeleton key={j} className="h-3 w-24" />
+                <Skeleton key={j} className="h-3 w-28" />
               ))}
+            </div>
+
+            {/* Footer */}
+            <div className="flex items-center justify-between pt-1 border-t border-border/40">
+              <Skeleton className="h-3 w-10" />
+              <Skeleton className="h-3 w-16" />
             </div>
           </div>
         ))}
@@ -106,27 +141,9 @@ export function TransactionsTableSkeleton() {
 
 // ─── Empty state ──────────────────────────────────────────────────────────────
 
-function EmptyState({ isFiltered }: { isFiltered: boolean }) {
+function EmptyState({ isFiltered, onClear }: { isFiltered: boolean; onClear?: () => void }) {
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="flex flex-col items-center gap-4 py-20 text-center"
-    >
-      <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-muted/60 border border-border">
-        <ArrowLeftRight className="h-8 w-8 text-muted-foreground/30" />
-      </div>
-      <div className="space-y-1">
-        <p className="text-sm font-semibold text-foreground">
-          {isFiltered ? "No matching transactions" : "No transactions yet"}
-        </p>
-        <p className="text-xs text-muted-foreground max-w-xs">
-          {isFiltered
-            ? "Try adjusting your search or filter to find what you're looking for."
-            : "Transactions will appear here once books are issued to members."}
-        </p>
-      </div>
-    </motion.div>
+    <EmptyStateNoTransactions isFiltered={isFiltered} onClear={onClear} />
   )
 }
 
@@ -148,16 +165,18 @@ function TransactionCard({
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: index * 0.04, duration: 0.2 }}
+      variants={cardEntrance}
+      initial="initial"
+      animate="animate"
+      whileHover={cardHover}
+      transition={{ delay: index * 0.04 }}
       onClick={() => onView(tx)}
       className={cn(
         "rounded-2xl border bg-card/60 backdrop-blur-sm p-4 space-y-3 cursor-pointer",
-        "transition-all duration-150 active:scale-[0.99]",
+        "active:scale-[0.99]",
         isOverdue
-          ? "border-destructive/25 hover:border-destructive/40 hover:bg-destructive/5"
-          : "border-border hover:border-primary/30 hover:bg-muted/30"
+          ? "border-destructive/25"
+          : "border-border"
       )}
     >
       {/* Top row: book + status */}
@@ -269,30 +288,32 @@ function Pagination({
   }
 
   return (
-    <div className="flex items-center justify-between gap-2 pt-1">
+    <div className="flex items-center justify-between gap-2 pt-2">
       <Button
         variant="outline"
         size="sm"
         onClick={() => onPage(page - 1)}
         disabled={page === 1}
-        className="h-8 gap-1.5 border-border text-foreground"
+        className="h-9 gap-1.5 border-border text-foreground px-3"
       >
         <ChevronLeft className="h-3.5 w-3.5" />
-        Prev
+        <span className="hidden xs:inline">Prev</span>
       </Button>
 
       <div className="flex items-center gap-1">
         {pages.map((p, i) =>
           p === "…" ? (
-            <span key={`ellipsis-${i}`} className="px-1 text-xs text-muted-foreground">
-              …
+            <span key={`ellipsis-${i}`} className="px-1 text-xs text-muted-foreground select-none">
+              ···
             </span>
           ) : (
             <button
               key={p}
               onClick={() => onPage(p as number)}
+              aria-current={p === page ? "page" : undefined}
               className={cn(
-                "h-8 w-8 rounded-lg text-xs font-medium transition-all",
+                "h-9 w-9 rounded-lg text-xs font-medium transition-all active:scale-95",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40",
                 p === page
                   ? "bg-primary text-primary-foreground shadow-sm"
                   : "text-muted-foreground hover:bg-muted hover:text-foreground"
@@ -309,9 +330,9 @@ function Pagination({
         size="sm"
         onClick={() => onPage(page + 1)}
         disabled={page === totalPages}
-        className="h-8 gap-1.5 border-border text-foreground"
+        className="h-9 gap-1.5 border-border text-foreground px-3"
       >
-        Next
+        <span className="hidden xs:inline">Next</span>
         <ChevronRight className="h-3.5 w-3.5" />
       </Button>
     </div>
@@ -400,15 +421,17 @@ export function TransactionsTable({
                   return (
                     <motion.tr
                       key={tx.id}
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      transition={{ delay: i * 0.03 }}
+                      variants={tableRow}
+                      initial="initial"
+                      animate="animate"
+                      exit="exit"
+                      transition={{ delay: i * 0.025 }}
                       onClick={() => handleView(tx)}
                       className={cn(
-                        "border-border transition-colors cursor-pointer group",
+                        "border-border cursor-pointer group transition-colors",
                         isOverdue
                           ? "hover:bg-destructive/5"
-                          : "hover:bg-muted/30"
+                          : "hover:bg-muted/35"
                       )}
                     >
                       {/* ID */}

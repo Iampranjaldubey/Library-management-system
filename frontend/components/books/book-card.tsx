@@ -1,6 +1,7 @@
 "use client"
 
 import { motion } from "framer-motion"
+import { cardEntrance, cardHover, cardTap } from "@/lib/animations"
 import { BookStatusBadge } from "./book-status-badge"
 import { Button } from "@/components/ui/button"
 import { Eye, Edit, Trash2, BookOpen } from "lucide-react"
@@ -37,13 +38,15 @@ export function BookCard({ book, index, canEdit, onView, onEdit, onDelete }: Boo
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 16 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.25, delay: index * 0.04, ease: "easeOut" }}
+      variants={cardEntrance}
+      initial="initial"
+      animate="animate"
+      whileHover={cardHover}
+      whileTap={cardTap}
+      transition={{ delay: index * 0.04 }}
       className={cn(
         "group relative flex flex-col rounded-xl border bg-gradient-to-br p-5 gap-4",
-        "hover:shadow-lg hover:shadow-black/5 dark:hover:shadow-black/20",
-        "transition-shadow duration-200",
+        "shadow-sm cursor-pointer",
         accent
       )}
     >
@@ -75,12 +78,12 @@ export function BookCard({ book, index, canEdit, onView, onEdit, onDelete }: Boo
         </div>
       </div>
 
-      {/* Actions — appear on hover */}
-      <div className="flex items-center gap-1.5 pt-1 border-t border-border/40">
+      {/* Actions */}
+      <div className="flex items-center gap-1 pt-1 border-t border-border/40">
         <Button
           variant="ghost"
           size="sm"
-          className="h-7 flex-1 text-xs gap-1.5 text-muted-foreground hover:text-foreground"
+          className="h-9 flex-1 text-xs gap-1.5 text-muted-foreground hover:text-foreground active:scale-95"
           onClick={() => onView(book)}
         >
           <Eye className="h-3.5 w-3.5" />
@@ -91,7 +94,7 @@ export function BookCard({ book, index, canEdit, onView, onEdit, onDelete }: Boo
             <Button
               variant="ghost"
               size="sm"
-              className="h-7 flex-1 text-xs gap-1.5 text-muted-foreground hover:text-foreground"
+              className="h-9 flex-1 text-xs gap-1.5 text-muted-foreground hover:text-foreground active:scale-95"
               onClick={() => onEdit(book)}
             >
               <Edit className="h-3.5 w-3.5" />
@@ -100,7 +103,7 @@ export function BookCard({ book, index, canEdit, onView, onEdit, onDelete }: Boo
             <Button
               variant="ghost"
               size="sm"
-              className="h-7 flex-1 text-xs gap-1.5 text-muted-foreground hover:text-destructive"
+              className="h-9 flex-1 text-xs gap-1.5 text-muted-foreground hover:text-destructive active:scale-95"
               onClick={() => onDelete(book)}
             >
               <Trash2 className="h-3.5 w-3.5" />

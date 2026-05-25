@@ -10,17 +10,22 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Search, X, SlidersHorizontal } from "lucide-react"
+import { Search, X, Filter } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { StatusFilter } from "@/hooks/use-transactions"
 
 // ─── Status option config ─────────────────────────────────────────────────────
 
-const STATUS_OPTIONS: { value: StatusFilter; label: string; dot?: string }[] = [
+const STATUS_OPTIONS: {
+  value: StatusFilter
+  label: string
+  dot?: string
+  pulse?: boolean
+}[] = [
   { value: "all",      label: "All Status" },
   { value: "ACTIVE",   label: "Active",   dot: "bg-primary" },
   { value: "RETURNED", label: "Returned", dot: "bg-emerald-500" },
-  { value: "OVERDUE",  label: "Overdue",  dot: "bg-destructive" },
+  { value: "OVERDUE",  label: "Overdue",  dot: "bg-destructive", pulse: true },
 ]
 
 // ─── Props ────────────────────────────────────────────────────────────────────
@@ -47,7 +52,8 @@ export function TransactionsFilters({
   disabled,
 }: TransactionsFiltersProps) {
   const isFiltered = searchQuery.trim() !== "" || statusFilter !== "all"
-  const activeFilterCount = (searchQuery.trim() !== "" ? 1 : 0) + (statusFilter !== "all" ? 1 : 0)
+  const activeFilterCount =
+    (searchQuery.trim() !== "" ? 1 : 0) + (statusFilter !== "all" ? 1 : 0)
 
   const handleClear = () => {
     onSearchChange("")
@@ -55,52 +61,65 @@ export function TransactionsFilters({
   }
 
   return (
-    <div className="space-y-3">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-        {/* Search */}
+    <div className="space-y-2.5">
+      <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center">
+
+        {/* ── Search input ── */}
         <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground/60" />
           <Input
             placeholder="Search by book or member…"
             value={searchQuery}
             onChange={(e) => onSearchChange(e.target.value)}
             disabled={disabled}
             className={cn(
-              "pl-9 bg-card/60 backdrop-blur-sm border-border text-foreground",
-              "placeholder:text-muted-foreground/50 transition-all duration-200",
-              "focus-visible:ring-2 focus-visible:ring-primary/30 focus-visible:border-primary/50",
+              "pl-9 bg-card/60 backdrop-blur-sm",
+              "placeholder:text-muted-foreground/40",
               searchQuery && "pr-9"
             )}
           />
-          {/* Clear search */}
+          {/* Clear search button */}
           <AnimatePresence>
             {searchQuery && (
               <motion.button
-                initial={{ opacity: 0, scale: 0.8 }}
+                initial={{ opacity: 0, scale: 0.7 }}
                 animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.8 }}
+                exit={{ opacity: 0, scale: 0.7 }}
                 transition={{ duration: 0.1 }}
                 type="button"
                 onClick={() => onSearchChange("")}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                className={cn(
+                  "absolute right-2.5 top-1/2 -translate-y-1/2",
+                  "flex h-5 w-5 items-center justify-center rounded-md",
+                  "text-muted-foreground/60 hover:text-foreground hover:bg-muted",
+                  "transition-colors duration-100",
+                )}
                 aria-label="Clear search"
               >
-                <X className="h-3.5 w-3.5" />
+                <X className="h-3 w-3" />
               </motion.button>
             )}
           </AnimatePresence>
         </div>
 
-        {/* Right side: status filter + clear */}
+        {/* ── Right controls ── */}
         <div className="flex items-center gap-2">
-          {/* Filter icon badge */}
-          <div className="relative">
-            <SlidersHorizontal className="h-4 w-4 text-muted-foreground" />
-            {activeFilterCount > 0 && (
-              <span className="absolute -top-1.5 -right-1.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-primary text-[9px] font-bold text-primary-foreground">
-                {activeFilterCount}
-              </span>
-            )}
+
+          {/* Filter icon with active badge */}
+          <div className="relative flex h-9 w-9 shrink-0 items-center justify-center">
+            <Filter className="h-4 w-4 text-muted-foreground/60" />
+            <AnimatePresence>
+              {activeFilterCount > 0 && (
+                <motion.span
+                  initial={{ scale: 0 }}
+                  animate={{ scale: 1 }}
+                  exit={{ scale: 0 }}
+                  className="absolute -top-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[9px] font-bold text-primary-foreground"
+                >
+                  {activeFilterCount}
+                </motion.span>
+              )}
+            </AnimatePresence>
           </div>
 
           {/* Status dropdown */}
@@ -111,8 +130,8 @@ export function TransactionsFilters({
           >
             <SelectTrigger
               className={cn(
-                "w-36 bg-card/60 backdrop-blur-sm border-border text-foreground transition-all",
-                statusFilter !== "all" && "border-primary/40 ring-1 ring-primary/20"
+                "w-36 bg-card/60 backdrop-blur-sm",
+                statusFilter !== "all" && "border-primary/40 ring-1 ring-primary/15"
               )}
             >
               <SelectValue placeholder="All Status" />
@@ -126,7 +145,7 @@ export function TransactionsFilters({
                         className={cn(
                           "h-1.5 w-1.5 rounded-full shrink-0",
                           opt.dot,
-                          opt.value === "OVERDUE" && "animate-pulse"
+                          opt.pulse && "animate-pulse"
                         )}
                       />
                     )}
@@ -137,7 +156,7 @@ export function TransactionsFilters({
             </SelectContent>
           </Select>
 
-          {/* Clear all filters */}
+          {/* Clear all */}
           <AnimatePresence>
             {isFiltered && (
               <motion.div
@@ -151,7 +170,7 @@ export function TransactionsFilters({
                   variant="ghost"
                   size="sm"
                   onClick={handleClear}
-                  className="h-9 px-3 text-muted-foreground hover:text-foreground gap-1.5 whitespace-nowrap"
+                  className="h-9 px-3 gap-1.5 text-muted-foreground hover:text-foreground whitespace-nowrap"
                 >
                   <X className="h-3.5 w-3.5" />
                   Clear
@@ -162,14 +181,14 @@ export function TransactionsFilters({
         </div>
       </div>
 
-      {/* Result summary */}
+      {/* ── Result summary ── */}
       <AnimatePresence>
         {!disabled && totalCount > 0 && (
           <motion.p
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="text-xs text-muted-foreground px-0.5"
+            className="text-xs text-muted-foreground/70 tabular-nums"
           >
             Showing{" "}
             <span className="font-semibold text-foreground">{resultCount}</span>
@@ -177,7 +196,7 @@ export function TransactionsFilters({
             <span className="font-semibold text-foreground">{totalCount}</span>
             {" "}transactions
             {isFiltered && (
-              <span className="text-muted-foreground/60"> · filtered</span>
+              <span className="text-muted-foreground/50"> · filtered</span>
             )}
           </motion.p>
         )}

@@ -19,21 +19,34 @@ export const PasswordInput = forwardRef<HTMLInputElement, PasswordInputProps>(
           ref={ref}
           type={show ? "text" : "password"}
           className={cn(
-            "pr-10 bg-white/5 border-white/10 text-foreground placeholder:text-muted-foreground/50",
-            "focus:border-primary/50 focus:ring-primary/20",
-            error && "border-destructive/60 focus:border-destructive focus:ring-destructive/20",
+            "pr-10",
+            // Auth page glass style
+            "bg-white/5 border-white/10 text-foreground placeholder:text-muted-foreground/40",
+            // Focus
+            "focus-visible:border-primary/50 focus-visible:ring-primary/15",
+            // Error
+            error && "border-destructive/60 focus-visible:border-destructive/70 focus-visible:ring-destructive/15",
             className
           )}
+          aria-invalid={!!error}
           {...props}
         />
         <button
           type="button"
           tabIndex={-1}
           onClick={() => setShow((s) => !s)}
-          className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground/50 hover:text-muted-foreground transition-colors"
+          className={cn(
+            "absolute right-3 top-1/2 -translate-y-1/2",
+            "flex h-5 w-5 items-center justify-center rounded",
+            "text-muted-foreground/50 hover:text-muted-foreground",
+            "transition-colors duration-150",
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40",
+          )}
           aria-label={show ? "Hide password" : "Show password"}
         >
-          {show ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+          {show
+            ? <EyeOff className="h-4 w-4" />
+            : <Eye className="h-4 w-4" />}
         </button>
       </div>
     )

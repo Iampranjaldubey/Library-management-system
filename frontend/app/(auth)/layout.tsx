@@ -21,7 +21,8 @@ const features = [
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen flex bg-background">
-      {/* ── Left panel — branding (hidden on mobile) ── */}
+
+      {/* ── Left panel — branding (lg+ only) ── */}
       <div className="hidden lg:flex lg:w-[52%] xl:w-[55%] relative flex-col justify-between p-12 overflow-hidden">
         {/* Layered background */}
         <div className="absolute inset-0 bg-gradient-to-br from-primary/20 via-background to-background" />
@@ -40,7 +41,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
           }}
         />
 
-        {/* Content */}
+        {/* Logo */}
         <div className="relative z-10">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary shadow-lg shadow-primary/30">
@@ -50,6 +51,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
           </div>
         </div>
 
+        {/* Hero copy + features */}
         <div className="relative z-10 space-y-10">
           <div className="space-y-4">
             <h1 className="text-4xl xl:text-5xl font-bold tracking-tight text-foreground leading-[1.1]">
@@ -80,6 +82,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
           </div>
         </div>
 
+        {/* Footer */}
         <div className="relative z-10">
           <p className="text-xs text-muted-foreground/50">
             © {new Date().getFullYear()} LibraryOS. All rights reserved.
@@ -88,16 +91,33 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
       </div>
 
       {/* ── Right panel — form ── */}
-      <div className="flex flex-1 flex-col items-center justify-center p-6 sm:p-10 lg:p-12">
-        {/* Mobile logo */}
-        <div className="flex lg:hidden items-center gap-2 mb-8">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary shadow-lg shadow-primary/30">
-            <Library className="h-4 w-4 text-primary-foreground" />
+      {/*
+        On mobile this is the full screen.
+        overflow-y-auto + min-h-screen ensures the form is scrollable on
+        very small viewports (e.g. register page with many fields).
+      */}
+      <div className="flex flex-1 flex-col min-h-screen overflow-y-auto">
+        {/* Mobile top bar */}
+        <div className="flex lg:hidden items-center justify-center pt-8 pb-2 px-6">
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary shadow-lg shadow-primary/30">
+              <Library className="h-4 w-4 text-primary-foreground" />
+            </div>
+            <span className="text-base font-bold tracking-tight text-foreground">LibraryOS</span>
           </div>
-          <span className="text-base font-bold tracking-tight text-foreground">LibraryOS</span>
         </div>
 
-        <div className="w-full max-w-[400px]">{children}</div>
+        {/* Form centred vertically on desktop, top-aligned on mobile */}
+        <div className="flex flex-1 flex-col items-center justify-start lg:justify-center px-5 sm:px-8 py-6 sm:py-10">
+          <div className="w-full max-w-[400px]">{children}</div>
+        </div>
+
+        {/* Mobile footer */}
+        <div className="flex lg:hidden justify-center pb-6 px-6">
+          <p className="text-xs text-muted-foreground/50 text-center">
+            © {new Date().getFullYear()} LibraryOS. All rights reserved.
+          </p>
+        </div>
       </div>
     </div>
   )

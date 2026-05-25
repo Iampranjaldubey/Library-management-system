@@ -1,17 +1,24 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
-import { booksApi, transactionsApi, dedupeBooks, ApiError, type BookDto } from "@/lib/api"
+import { motion, AnimatePresence } from "framer-motion"
+import { booksApi, transactionsApi, dedupeBooks, ApiError, type BookDto, type TransactionDto } from "@/lib/api"
 import { useProtectedRoute } from "@/hooks/use-protected-route"
 import { useAuth } from "@/context/auth-context"
-import { PageHeader } from "@/components/dashboard/page-header"
-import { StatsCard } from "@/components/dashboard/stats-card"
+import { canViewAllDashboardStats } from "@/lib/permissions"
+import { WelcomeSection } from "@/components/dashboard/welcome-section"
+import { AnalyticsCard, AnalyticsCardSkeleton } from "@/components/dashboard/analytics-card"
+import { QuickActions } from "@/components/dashboard/quick-actions"
+import { RecentTransactions } from "@/components/dashboard/recent-transactions"
+import { ActivityOverview } from "@/components/dashboard/activity-overview"
 import { DataTable, type Book } from "@/components/dashboard/data-table"
-import { StatsCardSkeleton, TableSkeleton } from "@/components/dashboard/skeletons"
+import { TableSkeleton } from "@/components/dashboard/skeletons"
+import { SmartErrorBanner } from "@/components/ui/error-state"
 import { Button } from "@/components/ui/button"
-import { BookOpen, BookCheck, BookX, ArrowLeftRight, AlertCircle, RefreshCw } from "lucide-react"
+import { BookOpen, BookCheck, BookX, ArrowLeftRight, RefreshCw } from "lucide-react"
 import { toast } from "sonner"
 import Link from "next/link"
+import { staggerContainer, staggerItem, fadeInUp } from "@/lib/animations"
 
 function mapBookDto(b: BookDto): Book {
   return {
@@ -27,15 +34,16 @@ function mapBookDto(b: BookDto): Book {
 
 export default function DashboardPage() {
   const { isLoading: authLoading } = useProtectedRoute()
-  const { isAdmin, isLibrarian } = useAuth()
-  // USER role has no access to transactions — never fetch it for them
-  const canViewTransactions = isAdmin || isLibrarian
+  const { user } = useAuth()
+  // Use centralized permission check
+  const canViewTransactions = canViewAllDashboardStats(user?.role)
 
   const [recentBooks, setRecentBooks] = useState<Book[]>([])
   const [totalBooks, setTotalBooks] = useState(0)
   const [issuedBooks, setIssuedBooks] = useState(0)
   const [availableBooks, setAvailableBooks] = useState(0)
   const [totalTransactions, setTotalTransactions] = useState(0)
+  const [recentTransactions, setRecentTransactions] = useState<TransactionDto[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -77,9 +85,13 @@ export default function DashboardPage() {
       if (!canViewTransactions) {
         // USER role — skip silently, stat card is hidden for them
         setTotalTransactions(0)
+        setRecentTransactions([])
       } else if (txRes.status === "fulfilled") {
         const value = txRes.value as Awaited<ReturnType<typeof transactionsApi.getAll>>
-        setTotalTransactions(Array.isArray(value?.data) ? value.data.length : 0)
+        const transactions = Array.isArray(value?.data) ? value.data : []
+        setTotalTransactions(transactions.length)
+        // Sort by ID descending to get most recent
+        setRecentTransactions(transactions.sort((a, b) => b.id - a.id))
       } else {
         const err = txRes.reason
         // Network error is already surfaced by the books banner — skip toast
@@ -102,97 +114,144 @@ export default function DashboardPage() {
   if (authLoading) return null
 
   return (
-    <div className="space-y-8">
-      <PageHeader
-        title="Dashboard"
-        description="Overview of your library management system"
-      >
+    <motion.div
+      variants={staggerContainer}
+      initial="initial"
+      animate="animate"
+      className="space-y-6"
+    >
+      {/* Welcome Section */}
+      <motion.div variants={staggerItem} className="flex items-stretch gap-3">
+        <WelcomeSection />
         <Button
           variant="outline"
           size="icon"
-          className="h-9 w-9 border-border"
+          className="h-10 w-10 border-border shrink-0 self-start mt-0"
           onClick={fetchData}
           disabled={isLoading}
           aria-label="Refresh dashboard"
         >
           <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
         </Button>
-      </PageHeader>
+      </motion.div>
 
-      {/* Error banner — shown when books fetch fails */}
-      {error && !isLoading && (
-        <div className="flex items-start gap-3 rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3">
-          <AlertCircle className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-destructive">
-              {error.includes("not running") ? "Backend server is offline" : "Failed to load data"}
-            </p>
-            <p className="text-xs text-destructive/80 mt-0.5">{error}</p>
-          </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="text-destructive hover:text-destructive hover:bg-destructive/10 h-7 px-2 text-xs shrink-0"
-            onClick={fetchData}
+      {/* Error banner */}
+      <AnimatePresence>
+        {error && !isLoading && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.2 }}
+            className="overflow-hidden"
           >
-            Retry
-          </Button>
-        </div>
-      )}
+            <SmartErrorBanner message={error} onRetry={fetchData} />
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-      {/* Stats grid */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      {/* Analytics Cards */}
+      <motion.div variants={staggerItem} className="grid gap-3 sm:gap-4 grid-cols-2 lg:grid-cols-4">
         {isLoading ? (
-          Array.from({ length: canViewTransactions ? 4 : 3 }).map((_, i) => <StatsCardSkeleton key={i} />)
+          Array.from({ length: canViewTransactions ? 4 : 3 }).map((_, i) => (
+            <AnalyticsCardSkeleton key={i} />
+          ))
         ) : (
           <>
-            <StatsCard
+            <AnalyticsCard
               title="Total Books"
               value={totalBooks}
               icon={BookOpen}
               description="in catalogue"
+              variant="primary"
+              delay={0}
             />
-            <StatsCard
+            <AnalyticsCard
               title="Available"
               value={availableBooks}
               icon={BookCheck}
               description="ready to issue"
+              variant="success"
+              delay={0.05}
             />
-            <StatsCard
+            <AnalyticsCard
               title="Issued"
               value={issuedBooks}
               icon={BookX}
               description="currently out"
+              variant="warning"
+              delay={0.1}
             />
             {canViewTransactions && (
-              <StatsCard
+              <AnalyticsCard
                 title="Transactions"
                 value={totalTransactions}
                 icon={ArrowLeftRight}
                 description="all time"
+                variant="default"
+                delay={0.15}
               />
             )}
           </>
         )}
-      </div>
+      </motion.div>
 
-      {/* Recent books */}
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-base font-semibold text-foreground">Recent Books</h2>
-          <Link
-            href="/dashboard/books"
-            className="text-sm text-primary hover:text-primary/80 transition-colors"
-          >
-            View all →
-          </Link>
+      {/* Two Column Layout */}
+      <motion.div variants={staggerItem} className="grid gap-6 lg:grid-cols-3">
+        {/* Right Column — shown first on mobile for quick access */}
+        <div className="space-y-6 lg:order-2">
+          {/* Quick Actions */}
+          <QuickActions />
+
+          {/* Activity Overview */}
+          <ActivityOverview
+            totalBooks={totalBooks}
+            availableBooks={availableBooks}
+            issuedBooks={issuedBooks}
+            totalTransactions={totalTransactions}
+            isLoading={isLoading}
+          />
         </div>
-        {isLoading ? (
-          <TableSkeleton rows={5} cols={6} />
-        ) : (
-          <DataTable books={recentBooks} onRefresh={fetchData} />
-        )}
-      </div>
-    </div>
+
+        {/* Left Column - 2/3 width */}
+        <div className="lg:col-span-2 space-y-6 lg:order-1">
+          {/* Recent Transactions - Only for ADMIN/LIBRARIAN */}
+          {canViewTransactions && (
+            <RecentTransactions
+              transactions={recentTransactions}
+              isLoading={isLoading}
+            />
+          )}
+
+          {/* Recent Books */}
+          <motion.div
+            variants={fadeInUp}
+            className="rounded-2xl border border-border bg-card/60 backdrop-blur-sm overflow-hidden"
+          >
+            <div className="flex items-center justify-between p-4 sm:p-6 border-b border-border">
+              <div>
+                <h3 className="text-base sm:text-lg font-semibold text-foreground">Recent Books</h3>
+                <p className="text-xs sm:text-sm text-muted-foreground mt-0.5 sm:mt-1">
+                  Latest additions to catalogue
+                </p>
+              </div>
+              <Button asChild variant="ghost" size="sm" className="gap-1.5 text-xs sm:text-sm">
+                <Link href="/dashboard/books">
+                  View all
+                  <ArrowLeftRight className="h-3.5 w-3.5" />
+                </Link>
+              </Button>
+            </div>
+            <div className="p-4 sm:p-6">
+              {isLoading ? (
+                <TableSkeleton rows={5} cols={6} />
+              ) : (
+                <DataTable books={recentBooks} onRefresh={fetchData} />
+              )}
+            </div>
+          </motion.div>
+        </div>
+      </motion.div>
+    </motion.div>
   )
 }

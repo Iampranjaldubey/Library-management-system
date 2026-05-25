@@ -1,8 +1,8 @@
 "use client"
 
-import { Button } from "@/components/ui/button"
-import { ChevronLeft, ChevronRight } from "lucide-react"
+import { motion } from "framer-motion"
 import { cn } from "@/lib/utils"
+import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react"
 
 interface BookPaginationProps {
   page: number
@@ -13,12 +13,16 @@ interface BookPaginationProps {
 }
 
 export function BookPagination({
-  page, totalPages, totalItems, pageSize, onPageChange,
+  page,
+  totalPages,
+  totalItems,
+  pageSize,
+  onPageChange,
 }: BookPaginationProps) {
   if (totalPages <= 1) return null
 
   const start = (page - 1) * pageSize + 1
-  const end = Math.min(page * pageSize, totalItems)
+  const end   = Math.min(page * pageSize, totalItems)
 
   // Build page number list with ellipsis
   const pages: (number | "…")[] = []
@@ -35,58 +39,115 @@ export function BookPagination({
   }
 
   return (
-    <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
-      <p className="text-sm text-muted-foreground order-2 sm:order-1">
-        Showing <span className="font-medium text-foreground">{start}–{end}</span> of{" "}
-        <span className="font-medium text-foreground">{totalItems}</span> books
+    <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-1">
+      {/* Count label */}
+      <p className="text-xs text-muted-foreground order-2 sm:order-1 tabular-nums">
+        Showing{" "}
+        <span className="font-semibold text-foreground">{start}–{end}</span>
+        {" "}of{" "}
+        <span className="font-semibold text-foreground">{totalItems}</span>
+        {" "}books
       </p>
 
+      {/* Controls */}
       <div className="flex items-center gap-1 order-1 sm:order-2">
-        <Button
-          variant="outline"
-          size="icon"
-          className="h-8 w-8 border-border"
+        {/* First page */}
+        <PaginationButton
+          onClick={() => onPageChange(1)}
+          disabled={page === 1}
+          aria-label="First page"
+        >
+          <ChevronsLeft className="h-3.5 w-3.5" />
+        </PaginationButton>
+
+        {/* Prev */}
+        <PaginationButton
           onClick={() => onPageChange(page - 1)}
           disabled={page === 1}
           aria-label="Previous page"
         >
-          <ChevronLeft className="h-4 w-4" />
-        </Button>
+          <ChevronLeft className="h-3.5 w-3.5" />
+        </PaginationButton>
 
-        {pages.map((p, i) =>
-          p === "…" ? (
-            <span key={`ellipsis-${i}`} className="px-1 text-muted-foreground text-sm">…</span>
-          ) : (
-            <Button
-              key={p}
-              variant={p === page ? "default" : "outline"}
-              size="icon"
-              className={cn(
-                "h-8 w-8 text-sm",
-                p === page
-                  ? "bg-primary text-primary-foreground border-primary"
-                  : "border-border text-foreground"
-              )}
-              onClick={() => onPageChange(p as number)}
-              aria-label={`Page ${p}`}
-              aria-current={p === page ? "page" : undefined}
-            >
-              {p}
-            </Button>
-          )
-        )}
+        {/* Page numbers */}
+        <div className="flex items-center gap-0.5 mx-1">
+          {pages.map((p, i) =>
+            p === "…" ? (
+              <span
+                key={`ellipsis-${i}`}
+                className="flex h-8 w-6 items-center justify-center text-xs text-muted-foreground/50 select-none"
+              >
+                ···
+              </span>
+            ) : (
+              <motion.button
+                key={p}
+                whileTap={{ scale: 0.92 }}
+                onClick={() => onPageChange(p as number)}
+                aria-label={`Page ${p}`}
+                aria-current={p === page ? "page" : undefined}
+                className={cn(
+                  "flex h-8 min-w-[2rem] items-center justify-center rounded-lg px-2",
+                  "text-xs font-medium transition-all duration-100",
+                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40",
+                  p === page
+                    ? "bg-primary text-primary-foreground shadow-sm shadow-primary/20"
+                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                )}
+              >
+                {p}
+              </motion.button>
+            )
+          )}
+        </div>
 
-        <Button
-          variant="outline"
-          size="icon"
-          className="h-8 w-8 border-border"
+        {/* Next */}
+        <PaginationButton
           onClick={() => onPageChange(page + 1)}
           disabled={page === totalPages}
           aria-label="Next page"
         >
-          <ChevronRight className="h-4 w-4" />
-        </Button>
+          <ChevronRight className="h-3.5 w-3.5" />
+        </PaginationButton>
+
+        {/* Last page */}
+        <PaginationButton
+          onClick={() => onPageChange(totalPages)}
+          disabled={page === totalPages}
+          aria-label="Last page"
+        >
+          <ChevronsRight className="h-3.5 w-3.5" />
+        </PaginationButton>
       </div>
     </div>
+  )
+}
+
+// ─── Shared nav button ────────────────────────────────────────────────────────
+
+function PaginationButton({
+  children,
+  disabled,
+  onClick,
+  ...props
+}: React.ComponentProps<"button">) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      className={cn(
+        "flex h-8 w-8 items-center justify-center rounded-lg",
+        "text-muted-foreground transition-all duration-100",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40",
+        "active:scale-[0.92]",
+        disabled
+          ? "opacity-35 cursor-not-allowed"
+          : "hover:bg-muted hover:text-foreground cursor-pointer"
+      )}
+      {...props}
+    >
+      {children}
+    </button>
   )
 }

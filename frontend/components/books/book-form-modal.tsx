@@ -5,13 +5,15 @@ import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
 import { motion, AnimatePresence } from "framer-motion"
+import { modalContent, formContainer, formField, fieldError } from "@/lib/animations"
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Loader2, BookPlus, BookOpen } from "lucide-react"
+import { LoadingButton } from "@/components/ui/button-loader"
+import { BookPlus, BookOpen, AlertCircle } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { BookItem } from "@/hooks/use-books"
 
@@ -85,21 +87,21 @@ export function BookFormModal({
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="bg-card border-border max-w-md p-0 overflow-hidden">
+      <DialogContent className="bg-card border-border w-full max-w-[calc(100vw-2rem)] sm:max-w-md p-0 overflow-hidden">
         <AnimatePresence>
           {open && (
             <motion.div
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 8 }}
-              transition={{ duration: 0.2, ease: "easeOut" }}
+              variants={modalContent}
+              initial="initial"
+              animate="animate"
+              exit="exit"
             >
               {/* Header */}
-              <div className="flex items-center gap-3 px-6 pt-6 pb-4 border-b border-border">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 border border-primary/20">
+              <div className="flex items-center gap-3 px-5 sm:px-6 pt-5 sm:pt-6 pb-4 border-b border-border">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 border border-primary/20 shrink-0">
                   <Icon className="h-5 w-5 text-primary" />
                 </div>
-                <div>
+                <div className="min-w-0">
                   <DialogHeader>
                     <DialogTitle className="text-base font-bold text-foreground">
                       {isEdit ? "Edit Book" : "Add New Book"}
@@ -115,38 +117,56 @@ export function BookFormModal({
 
               {/* Form */}
               <form onSubmit={handleSubmit(onSubmit)} noValidate>
-                <div className="px-6 py-5 space-y-4">
+                <motion.div
+                  variants={formContainer}
+                  initial="initial"
+                  animate="animate"
+                  className="px-5 sm:px-6 py-4 sm:py-5 space-y-4 sm:space-y-5"
+                >
                   {FIELDS.map(({ name, label, placeholder }) => (
-                    <div key={name} className="space-y-1.5">
+                    <motion.div key={name} variants={formField} className="space-y-1.5">
                       <Label
                         htmlFor={`book-${name}`}
                         className={cn(
-                          "text-sm font-medium",
-                          errors[name] ? "text-destructive" : "text-foreground"
+                          "text-sm font-medium transition-colors duration-150",
+                          errors[name] ? "text-destructive" : "text-foreground/80"
                         )}
                       >
                         {label}
+                        <span className="ml-0.5 text-destructive" aria-hidden="true">*</span>
                       </Label>
                       <Input
                         id={`book-${name}`}
                         placeholder={placeholder}
+                        aria-invalid={!!errors[name]}
                         className={cn(
-                          "bg-input border-border text-foreground placeholder:text-muted-foreground/50",
-                          errors[name] && "border-destructive/60 focus-visible:ring-destructive/20"
+                          "bg-input/50 border-border text-foreground placeholder:text-muted-foreground/40",
+                          "transition-all duration-150",
+                          errors[name] && "border-destructive/60 focus-visible:ring-destructive/15"
                         )}
                         {...register(name)}
                       />
-                      {errors[name] && (
-                        <p className="text-xs text-destructive" role="alert">
-                          {errors[name]?.message}
-                        </p>
-                      )}
-                    </div>
+                      <AnimatePresence initial={false}>
+                        {errors[name] && (
+                          <motion.p
+                            variants={fieldError}
+                            initial="initial"
+                            animate="animate"
+                            exit="exit"
+                            className="flex items-center gap-1.5 text-xs text-destructive overflow-hidden"
+                            role="alert"
+                          >
+                            <AlertCircle className="h-3 w-3 shrink-0" aria-hidden="true" />
+                            {errors[name]?.message}
+                          </motion.p>
+                        )}
+                      </AnimatePresence>
+                    </motion.div>
                   ))}
-                </div>
+                </motion.div>
 
                 {/* Footer */}
-                <div className="flex items-center justify-end gap-2 px-6 py-4 border-t border-border bg-muted/20">
+                <div className="flex items-center justify-end gap-2 px-5 sm:px-6 py-4 border-t border-border bg-muted/20">
                   <Button
                     type="button"
                     variant="outline"
@@ -157,21 +177,16 @@ export function BookFormModal({
                   >
                     Cancel
                   </Button>
-                  <Button
+                  <LoadingButton
                     type="submit"
                     size="sm"
-                    disabled={isSubmitting}
+                    isLoading={isSubmitting}
+                    loadingText={isEdit ? "Saving…" : "Adding…"}
+                    showProgress
                     className="gap-2 bg-primary text-primary-foreground hover:bg-primary/90 min-w-[100px]"
                   >
-                    {isSubmitting ? (
-                      <>
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                        {isEdit ? "Saving…" : "Adding…"}
-                      </>
-                    ) : (
-                      isEdit ? "Save changes" : "Add book"
-                    )}
-                  </Button>
+                    {isEdit ? "Save changes" : "Add book"}
+                  </LoadingButton>
                 </div>
               </form>
             </motion.div>

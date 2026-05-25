@@ -11,10 +11,12 @@ import { useAuth } from "@/context/auth-context"
 import { FormField } from "@/components/auth/form-field"
 import { PasswordInput } from "@/components/auth/password-input"
 import { RoleSelector } from "@/components/auth/role-selector"
-import { Button } from "@/components/ui/button"
+import { RegisterFormSkeleton } from "@/components/auth/auth-form-skeleton"
+import { LoadingButton } from "@/components/ui/button-loader"
 import { Input } from "@/components/ui/input"
 import { toast } from "sonner"
-import { Loader2 } from "lucide-react"
+import { motion } from "framer-motion"
+import { AlertCircle } from "lucide-react"
 
 // ─── Validation schema ────────────────────────────────────────────────────────
 
@@ -126,7 +128,7 @@ export default function RegisterPage() {
     }
   }
 
-  if (authLoading) return null
+  if (authLoading) return <RegisterFormSkeleton />
 
   return (
     <div className="space-y-7">
@@ -139,12 +141,17 @@ export default function RegisterPage() {
       </div>
 
       {/* Form */}
-      <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-4">
+      <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-5">
         {/* Server-level error banner */}
         {serverError && (
-          <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3">
-            <p className="text-sm text-destructive">{serverError}</p>
-          </div>
+          <motion.div
+            initial={{ opacity: 0, y: -6 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="flex items-start gap-2.5 rounded-lg border border-destructive/30 bg-destructive/8 px-4 py-3"
+          >
+            <AlertCircle className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
+            <p className="text-sm text-destructive leading-snug">{serverError}</p>
+          </motion.div>
         )}
 
         <FormField id="name" label="Full name" error={errors.name?.message}>
@@ -154,7 +161,8 @@ export default function RegisterPage() {
             placeholder="Jane Smith"
             autoComplete="name"
             autoFocus
-            className="bg-white/5 border-white/10 text-foreground placeholder:text-muted-foreground/50 focus:border-primary/50"
+            aria-invalid={!!errors.name}
+            className="bg-white/5 border-white/10 placeholder:text-muted-foreground/40 focus-visible:border-primary/50 focus-visible:ring-primary/15"
             {...register("name")}
           />
         </FormField>
@@ -165,7 +173,8 @@ export default function RegisterPage() {
             type="email"
             placeholder="you@library.com"
             autoComplete="email"
-            className="bg-white/5 border-white/10 text-foreground placeholder:text-muted-foreground/50 focus:border-primary/50"
+            aria-invalid={!!errors.email}
+            className="bg-white/5 border-white/10 placeholder:text-muted-foreground/40 focus-visible:border-primary/50 focus-visible:ring-primary/15"
             {...register("email")}
           />
         </FormField>
@@ -206,20 +215,15 @@ export default function RegisterPage() {
           />
         </div>
 
-        <Button
+        <LoadingButton
           type="submit"
-          disabled={isSubmitting}
-          className="w-full h-10 bg-primary text-primary-foreground hover:bg-primary/90 font-medium mt-2"
+          isLoading={isSubmitting}
+          loadingText="Creating account…"
+          showProgress
+          className="w-full h-10 bg-primary text-primary-foreground hover:bg-primary/90 font-medium"
         >
-          {isSubmitting ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Creating account…
-            </>
-          ) : (
-            "Create account"
-          )}
-        </Button>
+          Create account
+        </LoadingButton>
       </form>
 
       {/* Footer */}

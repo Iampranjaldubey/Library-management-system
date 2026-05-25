@@ -33,8 +33,8 @@ export function useProtectedRoute(options: Options = {}) {
     }
 
     if (allowedRoles && user && !allowedRoles.includes(user.role as Role)) {
-      // Authenticated but wrong role — send to dashboard root
-      router.replace("/dashboard")
+      // Authenticated but wrong role — send to unauthorized page
+      router.replace("/unauthorized")
     }
   }, [isAuthenticated, isLoading, user, allowedRoles, redirectTo, router])
 

@@ -4,13 +4,15 @@ import { useState, useEffect, useCallback } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { useProtectedRoute } from "@/hooks/use-protected-route"
 import { useAuth } from "@/context/auth-context"
+import { canManageBooks } from "@/lib/permissions"
 import { useBooks } from "@/hooks/use-books"
 import { booksApi, ApiError } from "@/lib/api"
 import type { BookItem } from "@/hooks/use-books"
 import type { BookFormValues } from "@/components/books/book-form-modal"
 
 import { PageHeader } from "@/components/dashboard/page-header"
-import { TableSkeleton } from "@/components/dashboard/skeletons"
+import { PageTransition } from "@/components/ui/page-transition"
+import { SkeletonTable } from "@/components/ui/shimmer-skeleton"
 import { BookGridSkeleton } from "@/components/books/book-grid-skeleton"
 import { BookTable } from "@/components/books/book-table"
 import { BookCard } from "@/components/books/book-card"
@@ -18,6 +20,8 @@ import { BookDetailModal } from "@/components/books/book-detail-modal"
 import { BookFormModal } from "@/components/books/book-form-modal"
 import { BookDeleteModal } from "@/components/books/book-delete-modal"
 import { BookPagination } from "@/components/books/book-pagination"
+import { EmptyStateNoResults, EmptyStateNoBooks } from "@/components/ui/empty-state"
+import { SmartErrorBanner } from "@/components/ui/error-state"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -29,7 +33,7 @@ import {
 } from "@/components/ui/tooltip"
 
 import {
-  Plus, Search, RefreshCw, LayoutGrid, List, AlertCircle, X,
+  Plus, Search, RefreshCw, LayoutGrid, List, X,
 } from "lucide-react"
 import { toast } from "sonner"
 
@@ -37,8 +41,9 @@ type ViewMode = "table" | "grid"
 
 export default function BooksPage() {
   const { isLoading: authLoading } = useProtectedRoute()
-  const { isAdmin, isLibrarian } = useAuth()
-  const canEdit = isAdmin || isLibrarian
+  const { user } = useAuth()
+  // Use centralized permission check
+  const canEdit = canManageBooks(user?.role)
 
   const {
     paginated, filtered, categories, isLoading, error,
@@ -133,8 +138,9 @@ export default function BooksPage() {
   if (authLoading) return null
 
   return (
-    <TooltipProvider delayDuration={200}>
-      <div className="space-y-6">
+    <PageTransition>
+      <TooltipProvider delayDuration={200}>
+        <div className="space-y-6">
         {/* Page header */}
         <PageHeader title="Book Management" description="Browse and manage your library catalogue">
           <Tooltip>
@@ -165,46 +171,28 @@ export default function BooksPage() {
         </PageHeader>
 
         {/* Error banner */}
-        <AnimatePresence>
-          {error && !isLoading && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: "auto" }}
-              exit={{ opacity: 0, height: 0 }}
-              className="flex items-start gap-3 rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3"
-            >
-              <AlertCircle className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-destructive">Failed to load books</p>
-                <p className="text-xs text-destructive/80 mt-0.5">{error}</p>
-              </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="text-destructive hover:text-destructive hover:bg-destructive/10 h-7 px-2 text-xs shrink-0"
-                onClick={fetchBooks}
-              >
-                Retry
-              </Button>
-            </motion.div>
-          )}
-        </AnimatePresence>
+        {error && !isLoading && (
+          <SmartErrorBanner
+            message={error}
+            onRetry={fetchBooks}
+          />
+        )}
 
         {/* Toolbar: search + filters + view toggle */}
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-          {/* Search */}
-          <div className="relative flex-1 max-w-sm">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+        <div className="flex flex-col gap-3">
+          {/* Row 1: Search (full width on mobile) */}
+          <div className="relative w-full sm:max-w-sm">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground pointer-events-none" />
             <Input
               placeholder="Search title, author, category…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="pl-9 pr-9 bg-input border-border text-foreground placeholder:text-muted-foreground"
+              className="pl-9 pr-9"
             />
             {search && (
               <button
                 onClick={() => setSearch("")}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                className="absolute right-3 top-1/2 -translate-y-1/2 flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:text-foreground transition-colors"
                 aria-label="Clear search"
               >
                 <X className="h-3.5 w-3.5" />
@@ -212,10 +200,10 @@ export default function BooksPage() {
             )}
           </div>
 
-          {/* Filters */}
+          {/* Row 2: Filters + view toggle */}
           <div className="flex items-center gap-2 flex-wrap">
             <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-              <SelectTrigger className="w-40 bg-input border-border text-foreground h-9">
+              <SelectTrigger className="w-36 sm:w-40 h-9">
                 <SelectValue placeholder="Category" />
               </SelectTrigger>
               <SelectContent>
@@ -227,7 +215,7 @@ export default function BooksPage() {
             </Select>
 
             <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as "all" | "available" | "issued")}>
-              <SelectTrigger className="w-36 bg-input border-border text-foreground h-9">
+              <SelectTrigger className="w-32 sm:w-36 h-9">
                 <SelectValue placeholder="Status" />
               </SelectTrigger>
               <SelectContent>
@@ -245,12 +233,12 @@ export default function BooksPage() {
                 onClick={clearFilters}
               >
                 <X className="h-3.5 w-3.5" />
-                Clear
+                <span className="hidden xs:inline">Clear</span>
               </Button>
             )}
 
-            {/* View toggle */}
-            <div className="flex items-center rounded-lg border border-border bg-input p-0.5 ml-auto sm:ml-0">
+            {/* View toggle — pushed to right */}
+            <div className="flex items-center rounded-lg border border-border bg-input p-0.5 ml-auto">
               <Tooltip>
                 <TooltipTrigger asChild>
                   <button
@@ -298,9 +286,23 @@ export default function BooksPage() {
               transition={{ duration: 0.15 }}
             >
               {viewMode === "table" ? (
-                <TableSkeleton rows={8} cols={6} />
+                <SkeletonTable rows={8} cols={6} />
               ) : (
                 <BookGridSkeleton count={12} />
+              )}
+            </motion.div>
+          ) : paginated.length === 0 ? (
+            <motion.div
+              key="empty"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.15 }}
+            >
+              {hasActiveFilters ? (
+                <EmptyStateNoResults onClear={clearFilters} />
+              ) : (
+                <EmptyStateNoBooks onAdd={canEdit ? openAdd : undefined} />
               )}
             </motion.div>
           ) : viewMode === "table" ? (
@@ -331,23 +333,17 @@ export default function BooksPage() {
               transition={{ duration: 0.15 }}
               className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
             >
-              {paginated.length === 0 ? (
-                <div className="col-span-full rounded-xl border border-border bg-card py-16 text-center">
-                  <p className="text-sm text-muted-foreground">No books match your filters.</p>
-                </div>
-              ) : (
-                paginated.map((book, i) => (
-                  <BookCard
-                    key={book.id}
-                    book={book}
-                    index={i}
-                    canEdit={canEdit}
-                    onView={setDetailBook}
-                    onEdit={openEdit}
-                    onDelete={setDeleteBook}
-                  />
-                ))
-              )}
+              {paginated.map((book, i) => (
+                <BookCard
+                  key={book.id}
+                  book={book}
+                  index={i}
+                  canEdit={canEdit}
+                  onView={setDetailBook}
+                  onEdit={openEdit}
+                  onDelete={setDeleteBook}
+                />
+              ))}
             </motion.div>
           )}
         </AnimatePresence>
@@ -398,6 +394,7 @@ export default function BooksPage() {
         onClose={() => setDeleteBook(null)}
         onConfirm={handleDeleteConfirm}
       />
-    </TooltipProvider>
+      </TooltipProvider>
+    </PageTransition>
   )
 }

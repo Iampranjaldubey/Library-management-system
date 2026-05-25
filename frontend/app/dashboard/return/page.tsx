@@ -6,10 +6,12 @@ import { useProtectedRoute } from "@/hooks/use-protected-route"
 import { useAuth } from "@/context/auth-context"
 import { useReturnForm } from "@/hooks/use-return-form"
 import { PageHeader } from "@/components/dashboard/page-header"
+import { PageTransition } from "@/components/ui/page-transition"
+import { ShimmerSkeleton } from "@/components/ui/shimmer-skeleton"
+import { SmartErrorBanner } from "@/components/ui/error-state"
 import { ReturnBookForm } from "@/components/return/return-book-form"
-import { Skeleton } from "@/components/ui/skeleton"
 import { Button } from "@/components/ui/button"
-import { ShieldOff, AlertCircle, RefreshCw } from "lucide-react"
+import { ShieldOff, RefreshCw } from "lucide-react"
 
 // ─── Loading skeleton ─────────────────────────────────────────────────────────
 
@@ -19,51 +21,51 @@ function ReturnSkeleton() {
       {/* Left */}
       <div className="space-y-5">
         {/* Alert strip placeholder */}
-        <Skeleton className="h-12 w-full rounded-xl" />
+        <ShimmerSkeleton className="h-12 w-full rounded-xl" />
 
         {/* Form card */}
         <div className="rounded-2xl border border-border bg-card/50 overflow-hidden">
           {/* Header */}
           <div className="flex items-center gap-3 px-6 py-5 border-b border-border bg-muted/20">
-            <Skeleton className="h-10 w-10 rounded-xl shrink-0" />
+            <ShimmerSkeleton className="h-10 w-10 rounded-xl shrink-0" />
             <div className="space-y-2 flex-1">
-              <Skeleton className="h-4 w-36" />
-              <Skeleton className="h-3 w-52" />
+              <ShimmerSkeleton className="h-4 w-36" />
+              <ShimmerSkeleton className="h-3 w-52" />
             </div>
-            <Skeleton className="h-6 w-20 rounded-full" />
+            <ShimmerSkeleton className="h-6 w-20 rounded-full" />
           </div>
           {/* Body */}
           <div className="px-6 py-6 space-y-3">
-            <Skeleton className="h-3 w-28" />
-            <Skeleton className="h-14 w-full rounded-xl" />
-            <Skeleton className="h-3 w-64" />
+            <ShimmerSkeleton className="h-3 w-28" />
+            <ShimmerSkeleton className="h-14 w-full rounded-xl" />
+            <ShimmerSkeleton className="h-3 w-64" />
           </div>
           {/* Footer */}
           <div className="flex gap-3 px-6 py-4 border-t border-border bg-muted/10">
-            <Skeleton className="h-9 w-20 rounded-lg" />
-            <Skeleton className="h-9 w-40 rounded-lg" />
+            <ShimmerSkeleton className="h-9 w-20 rounded-lg" />
+            <ShimmerSkeleton className="h-9 w-40 rounded-lg" />
           </div>
         </div>
       </div>
 
       {/* Right preview */}
       <div className="space-y-3">
-        <Skeleton className="h-3 w-28" />
+        <ShimmerSkeleton className="h-3 w-28" />
         <div className="rounded-2xl border border-border bg-card/50 overflow-hidden">
           <div className="px-5 py-4 border-b border-border bg-muted/20 flex items-center gap-3">
-            <Skeleton className="h-10 w-10 rounded-xl shrink-0" />
+            <ShimmerSkeleton className="h-10 w-10 rounded-xl shrink-0" />
             <div className="space-y-2 flex-1">
-              <Skeleton className="h-4 w-40" />
-              <Skeleton className="h-3 w-28" />
+              <ShimmerSkeleton className="h-4 w-40" />
+              <ShimmerSkeleton className="h-3 w-28" />
             </div>
           </div>
           <div className="px-5 py-4 space-y-3">
             {Array.from({ length: 4 }).map((_, i) => (
               <div key={i} className="flex items-center gap-3">
-                <Skeleton className="h-7 w-7 rounded-lg shrink-0" />
+                <ShimmerSkeleton className="h-7 w-7 rounded-lg shrink-0" />
                 <div className="flex-1 flex justify-between gap-4">
-                  <Skeleton className="h-3 w-16" />
-                  <Skeleton className="h-3 w-24" />
+                  <ShimmerSkeleton className="h-3 w-16" />
+                  <ShimmerSkeleton className="h-3 w-24" />
                 </div>
               </div>
             ))}
@@ -101,35 +103,7 @@ function AccessDenied() {
   )
 }
 
-// ─── Error banner ─────────────────────────────────────────────────────────────
 
-function ErrorBanner({ message, onRetry }: { message: string; onRetry: () => void }) {
-  return (
-    <motion.div
-      initial={{ opacity: 0, height: 0 }}
-      animate={{ opacity: 1, height: "auto" }}
-      exit={{ opacity: 0, height: 0 }}
-      transition={{ duration: 0.2 }}
-      className="overflow-hidden"
-    >
-      <div className="flex items-start gap-3 rounded-xl border border-destructive/30 bg-destructive/8 px-4 py-3.5">
-        <AlertCircle className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold text-destructive">Failed to load issued books</p>
-          <p className="text-xs text-destructive/70 mt-0.5">{message}</p>
-        </div>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={onRetry}
-          className="text-destructive hover:text-destructive hover:bg-destructive/10 h-7 px-2 text-xs shrink-0"
-        >
-          Retry
-        </Button>
-      </div>
-    </motion.div>
-  )
-}
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
@@ -152,18 +126,21 @@ export default function ReturnBookPage() {
 
   if (!canAccess) {
     return (
-      <div className="space-y-6">
-        <PageHeader
-          title="Return Book"
-          description="Process book returns from library members"
-        />
-        <AccessDenied />
-      </div>
+      <PageTransition>
+        <div className="space-y-6">
+          <PageHeader
+            title="Return Book"
+            description="Process book returns from library members"
+          />
+          <AccessDenied />
+        </div>
+      </PageTransition>
     )
   }
 
   return (
-    <div className="space-y-6">
+    <PageTransition>
+      <div className="space-y-6">
       {/* Page header */}
       <PageHeader
         title="Return Book"
@@ -182,11 +159,12 @@ export default function ReturnBookPage() {
       </PageHeader>
 
       {/* Error banner */}
-      <AnimatePresence>
-        {fetchError && !isTxLoading && (
-          <ErrorBanner message={fetchError} onRetry={fetchActiveTransactions} />
-        )}
-      </AnimatePresence>
+      {fetchError && !isTxLoading && (
+        <SmartErrorBanner
+          message={fetchError}
+          onRetry={fetchActiveTransactions}
+        />
+      )}
 
       {/* Content */}
       <AnimatePresence mode="wait">
@@ -212,6 +190,7 @@ export default function ReturnBookPage() {
           </motion.div>
         )}
       </AnimatePresence>
-    </div>
+      </div>
+    </PageTransition>
   )
 }

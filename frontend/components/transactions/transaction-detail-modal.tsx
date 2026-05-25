@@ -1,6 +1,7 @@
 "use client"
 
 import { motion, AnimatePresence } from "framer-motion"
+import { modalContent } from "@/lib/animations"
 import {
   Dialog,
   DialogContent,
@@ -73,10 +74,10 @@ export function TransactionDetailModal({
         <AnimatePresence>
           {open && (
             <motion.div
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 8 }}
-              transition={{ duration: 0.2, ease: "easeOut" }}
+              variants={modalContent}
+              initial="initial"
+              animate="animate"
+              exit="exit"
             >
               {/* ── Header ── */}
               <div

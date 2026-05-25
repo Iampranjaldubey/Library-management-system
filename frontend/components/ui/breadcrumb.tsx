@@ -1,109 +1,142 @@
-import * as React from 'react'
-import { Slot } from '@radix-ui/react-slot'
-import { ChevronRight, MoreHorizontal } from 'lucide-react'
+"use client"
 
-import { cn } from '@/lib/utils'
+import Link from "next/link"
+import { motion } from "framer-motion"
+import { ChevronRight, Home } from "lucide-react"
+import { cn } from "@/lib/utils"
+import { staggerContainer, staggerItem } from "@/lib/animations"
 
-function Breadcrumb({ ...props }: React.ComponentProps<'nav'>) {
-  return <nav aria-label="breadcrumb" data-slot="breadcrumb" {...props} />
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+interface BreadcrumbItem {
+  label: string
+  href?: string
+  icon?: React.ComponentType<{ className?: string }>
 }
 
-function BreadcrumbList({ className, ...props }: React.ComponentProps<'ol'>) {
-  return (
-    <ol
-      data-slot="breadcrumb-list"
-      className={cn(
-        'text-muted-foreground flex flex-wrap items-center gap-1.5 text-sm break-words sm:gap-2.5',
-        className,
-      )}
-      {...props}
-    />
-  )
+interface BreadcrumbProps {
+  items: BreadcrumbItem[]
+  className?: string
+  showHome?: boolean
 }
 
-function BreadcrumbItem({ className, ...props }: React.ComponentProps<'li'>) {
-  return (
-    <li
-      data-slot="breadcrumb-item"
-      className={cn('inline-flex items-center gap-1.5', className)}
-      {...props}
-    />
-  )
-}
+// ─── Component ────────────────────────────────────────────────────────────────
 
-function BreadcrumbLink({
-  asChild,
-  className,
-  ...props
-}: React.ComponentProps<'a'> & {
-  asChild?: boolean
-}) {
-  const Comp = asChild ? Slot : 'a'
+/**
+ * Enhanced breadcrumb component with smooth animations and hover effects.
+ * Provides clear navigation hierarchy with optional home link.
+ */
+export function Breadcrumb({ items, className, showHome = true }: BreadcrumbProps) {
+  const allItems = showHome 
+    ? [{ label: "Home", href: "/dashboard", icon: Home }, ...items]
+    : items
 
   return (
-    <Comp
-      data-slot="breadcrumb-link"
-      className={cn('hover:text-foreground transition-colors', className)}
-      {...props}
-    />
-  )
-}
-
-function BreadcrumbPage({ className, ...props }: React.ComponentProps<'span'>) {
-  return (
-    <span
-      data-slot="breadcrumb-page"
-      role="link"
-      aria-disabled="true"
-      aria-current="page"
-      className={cn('text-foreground font-normal', className)}
-      {...props}
-    />
-  )
-}
-
-function BreadcrumbSeparator({
-  children,
-  className,
-  ...props
-}: React.ComponentProps<'li'>) {
-  return (
-    <li
-      data-slot="breadcrumb-separator"
-      role="presentation"
-      aria-hidden="true"
-      className={cn('[&>svg]:size-3.5', className)}
-      {...props}
+    <motion.nav
+      variants={staggerContainer}
+      initial="initial"
+      animate="animate"
+      className={cn("flex items-center space-x-1 text-sm", className)}
+      aria-label="Breadcrumb"
     >
-      {children ?? <ChevronRight />}
-    </li>
+      <ol className="flex items-center space-x-1">
+        {allItems.map((item, index) => {
+          const isLast = index === allItems.length - 1
+          const Icon = item.icon
+
+          return (
+            <motion.li
+              key={`${item.label}-${index}`}
+              variants={staggerItem}
+              className="flex items-center space-x-1"
+            >
+              {/* Separator */}
+              {index > 0 && (
+                <motion.div
+                  initial={{ opacity: 0, x: -5 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: index * 0.05 }}
+                >
+                  <ChevronRight className="h-3 w-3 text-muted-foreground/60" />
+                </motion.div>
+              )}
+
+              {/* Breadcrumb item */}
+              <motion.div
+                initial={{ opacity: 0, y: -2 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: index * 0.05 + 0.1 }}
+                className="flex items-center gap-1.5"
+              >
+                {Icon && (
+                  <Icon className={cn(
+                    "h-3 w-3",
+                    isLast ? "text-foreground" : "text-muted-foreground"
+                  )} />
+                )}
+
+                {item.href && !isLast ? (
+                  <Link
+                    href={item.href}
+                    className="font-medium text-muted-foreground hover:text-foreground transition-colors duration-200 hover:underline underline-offset-4"
+                  >
+                    {item.label}
+                  </Link>
+                ) : (
+                  <span className={cn(
+                    "font-medium",
+                    isLast ? "text-foreground" : "text-muted-foreground"
+                  )}>
+                    {item.label}
+                  </span>
+                )}
+              </motion.div>
+            </motion.li>
+          )
+        })}
+      </ol>
+    </motion.nav>
   )
 }
 
-function BreadcrumbEllipsis({
-  className,
-  ...props
-}: React.ComponentProps<'span'>) {
-  return (
-    <span
-      data-slot="breadcrumb-ellipsis"
-      role="presentation"
-      aria-hidden="true"
-      className={cn('flex size-9 items-center justify-center', className)}
-      {...props}
-    >
-      <MoreHorizontal className="size-4" />
-      <span className="sr-only">More</span>
-    </span>
-  )
+// ─── Preset Breadcrumbs ───────────────────────────────────────────────────────
+
+interface PageBreadcrumbProps {
+  title: string
+  parent?: { label: string; href: string }
+  className?: string
 }
 
-export {
-  Breadcrumb,
-  BreadcrumbList,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbPage,
-  BreadcrumbSeparator,
-  BreadcrumbEllipsis,
+export function PageBreadcrumb({ title, parent, className }: PageBreadcrumbProps) {
+  const items: BreadcrumbItem[] = parent 
+    ? [parent, { label: title }]
+    : [{ label: title }]
+
+  return <Breadcrumb items={items} className={className} />
+}
+
+// ─── Auto Breadcrumb ──────────────────────────────────────────────────────────
+
+import { usePathname } from "next/navigation"
+import { navigation } from "@/lib/navigation"
+
+interface AutoBreadcrumbProps {
+  className?: string
+}
+
+export function AutoBreadcrumb({ className }: AutoBreadcrumbProps) {
+  const pathname = usePathname()
+  
+  // Find current page in navigation
+  const currentPage = navigation.find(item => item.href === pathname)
+  
+  if (!currentPage) {
+    return null
+  }
+
+  const items: BreadcrumbItem[] = [
+    { label: currentPage.name }
+  ]
+
+  return <Breadcrumb items={items} className={className} />
 }

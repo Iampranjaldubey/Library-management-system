@@ -6,20 +6,27 @@ export function BookGridSkeleton({ count = 9 }: { count?: number }) {
       {Array.from({ length: count }).map((_, i) => (
         <div
           key={i}
-          className="rounded-xl border border-border bg-card p-5 space-y-4"
+          className="rounded-xl border border-border bg-card p-5 space-y-4 overflow-hidden"
         >
+          {/* Icon + badge row */}
           <div className="flex items-start justify-between">
             <Skeleton className="h-10 w-10 rounded-lg" />
             <Skeleton className="h-5 w-20 rounded-full" />
           </div>
+
+          {/* Title + author */}
           <div className="space-y-2">
             <Skeleton className="h-4 w-full" />
             <Skeleton className="h-3 w-2/3" />
           </div>
+
+          {/* ISBN + category */}
           <div className="space-y-2">
             <Skeleton className="h-3 w-full" />
             <Skeleton className="h-3 w-3/4" />
           </div>
+
+          {/* Action buttons */}
           <div className="flex gap-1.5 pt-1 border-t border-border/40">
             <Skeleton className="h-7 flex-1 rounded-md" />
             <Skeleton className="h-7 flex-1 rounded-md" />

@@ -5,12 +5,14 @@ import { motion, AnimatePresence } from "framer-motion"
 import { useProtectedRoute } from "@/hooks/use-protected-route"
 import { useTransactions } from "@/hooks/use-transactions"
 import { PageHeader } from "@/components/dashboard/page-header"
+import { PageTransition } from "@/components/ui/page-transition"
+import { ShimmerSkeleton } from "@/components/ui/shimmer-skeleton"
+import { SmartErrorBanner } from "@/components/ui/error-state"
 import { TransactionsFilters } from "@/components/transactions/transactions-filters"
 import { TransactionsTable, TransactionsTableSkeleton } from "@/components/transactions/transactions-table"
 import { Button } from "@/components/ui/button"
-import { Skeleton } from "@/components/ui/skeleton"
 import {
-  AlertCircle, RefreshCw, ArrowLeftRight,
+  RefreshCw, ArrowLeftRight,
   BookOpen, RotateCcw, AlertTriangle,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -31,7 +33,7 @@ function StatCard({
   return (
     <div
       className={cn(
-        "flex items-center gap-3 rounded-xl border px-4 py-3",
+        "flex items-center gap-2.5 rounded-xl border px-3 py-2.5 sm:px-4 sm:py-3",
         "bg-card/60 backdrop-blur-sm transition-colors",
         variant === "warning"
           ? "border-destructive/20 hover:border-destructive/30"
@@ -42,7 +44,7 @@ function StatCard({
     >
       <div
         className={cn(
-          "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg",
+          "flex h-7 w-7 sm:h-8 sm:w-8 shrink-0 items-center justify-center rounded-lg",
           variant === "warning"
             ? "bg-destructive/10"
             : variant === "success"
@@ -52,7 +54,7 @@ function StatCard({
       >
         <Icon
           className={cn(
-            "h-4 w-4",
+            "h-3.5 w-3.5 sm:h-4 sm:w-4",
             variant === "warning"
               ? "text-destructive"
               : variant === "success"
@@ -61,11 +63,11 @@ function StatCard({
           )}
         />
       </div>
-      <div>
-        <p className="text-lg font-bold text-foreground tabular-nums leading-none">
+      <div className="min-w-0">
+        <p className="text-base sm:text-lg font-bold text-foreground tabular-nums leading-none">
           {value}
         </p>
-        <p className="text-[11px] text-muted-foreground mt-0.5">{label}</p>
+        <p className="text-[10px] sm:text-[11px] text-muted-foreground mt-0.5 truncate">{label}</p>
       </div>
     </div>
   )
@@ -73,45 +75,17 @@ function StatCard({
 
 function StatCardSkeleton() {
   return (
-    <div className="flex items-center gap-3 rounded-xl border border-border bg-card/60 px-4 py-3">
-      <Skeleton className="h-8 w-8 rounded-lg shrink-0" />
+    <div className="flex items-center gap-2.5 rounded-xl border border-border bg-card/60 px-3 py-2.5 sm:px-4 sm:py-3">
+      <ShimmerSkeleton className="h-7 w-7 sm:h-8 sm:w-8 rounded-lg shrink-0" />
       <div className="space-y-1.5">
-        <Skeleton className="h-5 w-8" />
-        <Skeleton className="h-3 w-16" />
+        <ShimmerSkeleton className="h-4 sm:h-5 w-7 sm:w-8" />
+        <ShimmerSkeleton className="h-2.5 sm:h-3 w-12 sm:w-16" />
       </div>
     </div>
   )
 }
 
-// ─── Error banner ─────────────────────────────────────────────────────────────
 
-function ErrorBanner({ message, onRetry }: { message: string; onRetry: () => void }) {
-  return (
-    <motion.div
-      initial={{ opacity: 0, height: 0 }}
-      animate={{ opacity: 1, height: "auto" }}
-      exit={{ opacity: 0, height: 0 }}
-      transition={{ duration: 0.2 }}
-      className="overflow-hidden"
-    >
-      <div className="flex items-start gap-3 rounded-xl border border-destructive/30 bg-destructive/8 px-4 py-3.5">
-        <AlertCircle className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold text-destructive">Failed to load transactions</p>
-          <p className="text-xs text-destructive/70 mt-0.5">{message}</p>
-        </div>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={onRetry}
-          className="text-destructive hover:text-destructive hover:bg-destructive/10 h-7 px-2 text-xs shrink-0"
-        >
-          Retry
-        </Button>
-      </div>
-    </motion.div>
-  )
-}
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
@@ -142,7 +116,8 @@ export default function TransactionsPage() {
   const isFiltered = searchQuery.trim() !== "" || statusFilter !== "all"
 
   return (
-    <div className="space-y-6">
+    <PageTransition>
+      <div className="space-y-6">
       {/* ── Page header ── */}
       <PageHeader
         title="Transactions"
@@ -183,11 +158,12 @@ export default function TransactionsPage() {
       </div>
 
       {/* ── Error banner ── */}
-      <AnimatePresence>
-        {fetchError && !isLoading && (
-          <ErrorBanner message={fetchError} onRetry={fetchTransactions} />
-        )}
-      </AnimatePresence>
+      {fetchError && !isLoading && (
+        <SmartErrorBanner
+          message={fetchError}
+          onRetry={fetchTransactions}
+        />
+      )}
 
       {/* ── Filters ── */}
       <TransactionsFilters
@@ -231,6 +207,7 @@ export default function TransactionsPage() {
           </motion.div>
         )}
       </AnimatePresence>
-    </div>
+      </div>
+    </PageTransition>
   )
 }

@@ -5,10 +5,11 @@ import { TransactionSelect } from "@/components/return/transaction-select"
 import { ReturnSummaryCard } from "@/components/return/return-summary-card"
 import { ReturnSuccessState } from "@/components/return/return-success-state"
 import { Button } from "@/components/ui/button"
+import { LoadingButton } from "@/components/ui/button-loader"
 import { Label } from "@/components/ui/label"
 import { cn } from "@/lib/utils"
 import {
-  RotateCcw, Loader2, BookOpen, Check,
+  RotateCcw, BookOpen, Check,
   AlertTriangle, BookCheck,
 } from "lucide-react"
 import type { useReturnForm } from "@/hooks/use-return-form"
@@ -140,7 +141,7 @@ export function ReturnBookForm({
                 <div className="rounded-2xl border border-border bg-card/60 backdrop-blur-sm shadow-sm overflow-hidden">
 
                   {/* Card header */}
-                  <div className="flex flex-wrap items-center gap-3 px-6 py-5 border-b border-border bg-muted/20">
+                  <div className="flex flex-wrap items-center gap-3 px-4 sm:px-6 py-4 sm:py-5 border-b border-border bg-muted/20">
                     <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 border border-primary/20 shrink-0">
                       <RotateCcw className="h-5 w-5 text-primary" />
                     </div>
@@ -167,7 +168,7 @@ export function ReturnBookForm({
                   </div>
 
                   {/* Form body */}
-                  <div className="px-6 py-6">
+                  <div className="px-4 sm:px-6 py-4 sm:py-6">
                     <motion.div
                       className="space-y-2"
                       initial={{ opacity: 0, x: -8 }}
@@ -192,7 +193,7 @@ export function ReturnBookForm({
                   </div>
 
                   {/* Card footer / actions */}
-                  <div className="flex items-center gap-3 px-6 py-4 border-t border-border bg-muted/10">
+                  <div className="flex flex-col-reverse sm:flex-row flex-wrap items-stretch sm:items-center gap-2 sm:gap-3 px-4 sm:px-6 py-4 border-t border-border bg-muted/10">
                     <Button
                       type="button"
                       variant="outline"
@@ -203,41 +204,35 @@ export function ReturnBookForm({
                       Reset
                     </Button>
 
-                    <Button
+                    <LoadingButton
                       type="submit"
-                      disabled={!selectedTransactionId || isSubmitting}
+                      isLoading={isSubmitting}
+                      loadingText="Processing…"
+                      showProgress
+                      disabled={!selectedTransactionId}
                       className={cn(
-                        "gap-2 min-w-[160px] transition-all",
+                        "gap-2 sm:min-w-[160px] transition-all",
                         selectedTransaction?.status === "OVERDUE"
                           ? "bg-destructive text-destructive-foreground hover:bg-destructive/90"
                           : "bg-primary text-primary-foreground hover:bg-primary/90"
                       )}
                     >
-                      {isSubmitting ? (
-                        <>
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                          Processing…
-                        </>
-                      ) : (
-                        <>
-                          <Check className="h-4 w-4" />
-                          {selectedTransaction?.status === "OVERDUE"
-                            ? "Return & Apply Fine"
-                            : "Process Return"}
-                        </>
-                      )}
-                    </Button>
+                      <Check className="h-4 w-4" />
+                      {selectedTransaction?.status === "OVERDUE"
+                        ? "Return & Apply Fine"
+                        : "Process Return"}
+                    </LoadingButton>
 
-                    {/* Overdue fine preview next to button */}
+                    {/* Overdue fine preview */}
                     <AnimatePresence>
                       {selectedTransaction?.status === "OVERDUE" && (
                         <motion.span
                           initial={{ opacity: 0, x: -8 }}
                           animate={{ opacity: 1, x: 0 }}
                           exit={{ opacity: 0, x: -8 }}
-                          className="text-xs text-destructive font-medium tabular-nums"
+                          className="text-xs text-destructive font-semibold tabular-nums sm:ml-auto"
                         >
-                          ₹{previewFine(selectedTransaction.dueDate).toFixed(0)} fine
+                          ₹{previewFine(selectedTransaction.dueDate).toFixed(0)} est. fine
                         </motion.span>
                       )}
                     </AnimatePresence>
@@ -252,8 +247,8 @@ export function ReturnBookForm({
                 transition={{ delay: 0.1, duration: 0.22 }}
                 className="lg:sticky lg:top-6"
               >
-                <div className="space-y-2 mb-3">
-                  <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground px-1">
+                <div className="flex items-center justify-between mb-2 sm:mb-3 px-0.5">
+                  <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
                     Return Preview
                   </p>
                 </div>

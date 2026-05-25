@@ -144,14 +144,15 @@ export function DataTable({ books, onRefresh }: DataTableProps) {
 
   return (
     <>
-      <div className="rounded-xl border border-border bg-card overflow-hidden">
+      {/* ── Desktop table ── */}
+      <div className="hidden sm:block rounded-xl border border-border bg-card overflow-hidden">
         <Table>
           <TableHeader>
             <TableRow className="border-border hover:bg-transparent bg-muted/20">
               <TableHead className="text-muted-foreground font-medium text-xs uppercase tracking-wide">Title</TableHead>
-              <TableHead className="text-muted-foreground font-medium text-xs uppercase tracking-wide">Author</TableHead>
-              <TableHead className="text-muted-foreground font-medium text-xs uppercase tracking-wide hidden md:table-cell">ISBN</TableHead>
-              <TableHead className="text-muted-foreground font-medium text-xs uppercase tracking-wide hidden lg:table-cell">Category</TableHead>
+              <TableHead className="text-muted-foreground font-medium text-xs uppercase tracking-wide hidden md:table-cell">Author</TableHead>
+              <TableHead className="text-muted-foreground font-medium text-xs uppercase tracking-wide hidden lg:table-cell">ISBN</TableHead>
+              <TableHead className="text-muted-foreground font-medium text-xs uppercase tracking-wide hidden xl:table-cell">Category</TableHead>
               <TableHead className="text-muted-foreground font-medium text-xs uppercase tracking-wide">Status</TableHead>
               <TableHead className="text-right text-muted-foreground font-medium text-xs uppercase tracking-wide">Actions</TableHead>
             </TableRow>
@@ -161,14 +162,16 @@ export function DataTable({ books, onRefresh }: DataTableProps) {
               const status = statusConfig[book.status] ?? statusConfig.reserved
               return (
                 <TableRow key={book.id} className="border-border hover:bg-muted/30 transition-colors">
-                  <TableCell className="font-medium text-foreground max-w-[200px] truncate">
+                  <TableCell className="font-medium text-foreground max-w-[160px] truncate">
                     {book.title}
                   </TableCell>
-                  <TableCell className="text-muted-foreground">{book.author}</TableCell>
-                  <TableCell className="font-mono text-xs text-muted-foreground hidden md:table-cell">
+                  <TableCell className="text-muted-foreground hidden md:table-cell max-w-[120px] truncate">
+                    {book.author}
+                  </TableCell>
+                  <TableCell className="font-mono text-xs text-muted-foreground hidden lg:table-cell">
                     {book.isbn}
                   </TableCell>
-                  <TableCell className="text-muted-foreground hidden lg:table-cell">
+                  <TableCell className="text-muted-foreground hidden xl:table-cell">
                     {book.category}
                   </TableCell>
                   <TableCell>
@@ -208,6 +211,57 @@ export function DataTable({ books, onRefresh }: DataTableProps) {
             })}
           </TableBody>
         </Table>
+      </div>
+
+      {/* ── Mobile card list ── */}
+      <div className="sm:hidden space-y-2">
+        {books.map((book) => {
+          const status = statusConfig[book.status] ?? statusConfig.reserved
+          return (
+            <div
+              key={book.id}
+              className="flex items-center gap-3 rounded-xl border border-border bg-card p-3"
+            >
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+                <BookOpen className="h-4 w-4 text-primary" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-foreground truncate">{book.title}</p>
+                <p className="text-xs text-muted-foreground truncate">{book.author}</p>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <Badge variant="outline" className={status.className}>
+                  {status.label}
+                </Badge>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg">
+                      <MoreHorizontal className="h-4 w-4" />
+                      <span className="sr-only">Open menu</span>
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-40">
+                    <DropdownMenuItem
+                      className="gap-2 cursor-pointer"
+                      onClick={() => setEditBook(book)}
+                    >
+                      <Edit className="h-4 w-4" />
+                      Edit
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      className="gap-2 text-destructive focus:text-destructive cursor-pointer"
+                      onClick={() => setDeleteBook(book)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      Delete
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            </div>
+          )
+        })}
       </div>
 
       {/* Edit dialog */}

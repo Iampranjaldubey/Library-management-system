@@ -10,10 +10,12 @@ import { authService, AuthError } from "@/lib/auth"
 import { useAuth } from "@/context/auth-context"
 import { FormField } from "@/components/auth/form-field"
 import { PasswordInput } from "@/components/auth/password-input"
-import { Button } from "@/components/ui/button"
+import { LoginFormSkeleton } from "@/components/auth/auth-form-skeleton"
+import { LoadingButton } from "@/components/ui/button-loader"
 import { Input } from "@/components/ui/input"
 import { toast } from "sonner"
-import { Loader2 } from "lucide-react"
+import { motion } from "framer-motion"
+import { AlertCircle } from "lucide-react"
 
 // ─── Validation schema ────────────────────────────────────────────────────────
 
@@ -77,7 +79,7 @@ export default function LoginPage() {
   }
 
   // Don't flash the form while checking stored session
-  if (authLoading) return null
+  if (authLoading) return <LoginFormSkeleton />
 
   return (
     <div className="space-y-7">
@@ -90,12 +92,17 @@ export default function LoginPage() {
       </div>
 
       {/* Form */}
-      <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-4">
+      <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-5">
         {/* Server-level error banner */}
         {serverError && (
-          <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3">
-            <p className="text-sm text-destructive">{serverError}</p>
-          </div>
+          <motion.div
+            initial={{ opacity: 0, y: -6 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="flex items-start gap-2.5 rounded-lg border border-destructive/30 bg-destructive/8 px-4 py-3"
+          >
+            <AlertCircle className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
+            <p className="text-sm text-destructive leading-snug">{serverError}</p>
+          </motion.div>
         )}
 
         <FormField id="email" label="Email" error={errors.email?.message}>
@@ -105,7 +112,8 @@ export default function LoginPage() {
             placeholder="you@library.com"
             autoComplete="email"
             autoFocus
-            className="bg-white/5 border-white/10 text-foreground placeholder:text-muted-foreground/50 focus:border-primary/50"
+            aria-invalid={!!errors.email}
+            className="bg-white/5 border-white/10 placeholder:text-muted-foreground/40 focus-visible:border-primary/50 focus-visible:ring-primary/15"
             {...register("email")}
           />
         </FormField>
@@ -120,36 +128,33 @@ export default function LoginPage() {
           />
         </FormField>
 
-        <div className="flex items-center justify-between pt-1">
-          <label className="flex items-center gap-2 cursor-pointer select-none">
+        <div className="flex items-center justify-between">
+          <label className="flex items-center gap-2 cursor-pointer select-none group">
             <input
               type="checkbox"
-              className="h-4 w-4 rounded border-white/20 bg-white/5 accent-primary"
+              className="h-4 w-4 rounded border-white/20 bg-white/5 accent-primary cursor-pointer"
             />
-            <span className="text-sm text-muted-foreground">Remember me</span>
+            <span className="text-sm text-muted-foreground group-hover:text-foreground transition-colors duration-150">
+              Remember me
+            </span>
           </label>
           <button
             type="button"
-            className="text-sm text-primary hover:text-primary/80 transition-colors"
+            className="text-sm text-primary/80 hover:text-primary transition-colors duration-150"
           >
             Forgot password?
           </button>
         </div>
 
-        <Button
+        <LoadingButton
           type="submit"
-          disabled={isSubmitting}
-          className="w-full h-10 bg-primary text-primary-foreground hover:bg-primary/90 font-medium mt-2"
+          isLoading={isSubmitting}
+          loadingText="Signing in…"
+          showProgress
+          className="w-full h-10 bg-primary text-primary-foreground hover:bg-primary/90 font-medium"
         >
-          {isSubmitting ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Signing in…
-            </>
-          ) : (
-            "Sign in"
-          )}
-        </Button>
+          Sign in
+        </LoadingButton>
       </form>
 
       {/* Footer */}

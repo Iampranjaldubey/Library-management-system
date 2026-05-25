@@ -1,6 +1,7 @@
 "use client"
 
 import { motion, AnimatePresence } from "framer-motion"
+import { modalContent } from "@/lib/animations"
 import {
   AlertDialog, AlertDialogContent, AlertDialogHeader,
   AlertDialogTitle, AlertDialogDescription, AlertDialogFooter,
@@ -26,10 +27,10 @@ export function BookDeleteModal({
         <AnimatePresence>
           {open && (
             <motion.div
-              initial={{ opacity: 0, scale: 0.96 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.96 }}
-              transition={{ duration: 0.18, ease: "easeOut" }}
+              variants={modalContent}
+              initial="initial"
+              animate="animate"
+              exit="exit"
             >
               {/* Warning band */}
               <div className="flex items-center gap-3 px-6 pt-6 pb-4 border-b border-border">

@@ -1,6 +1,7 @@
 "use client"
 
 import { motion, AnimatePresence } from "framer-motion"
+import { tableRow } from "@/lib/animations"
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table"
@@ -10,9 +11,7 @@ import {
   DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { BookStatusBadge } from "./book-status-badge"
-import {
-  Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription,
-} from "@/components/ui/empty"
+import { InlineEmptyState } from "@/components/ui/empty-state"
 import {
   Eye, Edit, Trash2, MoreHorizontal, BookOpen,
   ChevronUp, ChevronDown, ChevronsUpDown,
@@ -50,16 +49,12 @@ export function BookTable({
 }: BookTableProps) {
   if (books.length === 0) {
     return (
-      <div className="rounded-xl border border-border bg-card">
-        <Empty className="py-16">
-          <EmptyHeader>
-            <EmptyMedia variant="icon"><BookOpen /></EmptyMedia>
-            <EmptyTitle>No books found</EmptyTitle>
-            <EmptyDescription>
-              No books match your current filters. Try adjusting your search or add a new book.
-            </EmptyDescription>
-          </EmptyHeader>
-        </Empty>
+      <div className="rounded-xl border border-border bg-card overflow-hidden">
+        <InlineEmptyState
+          icon={BookOpen}
+          title="No books found"
+          description="No books match your current filters. Try adjusting your search or add a new book."
+        />
       </div>
     )
   }
@@ -97,11 +92,12 @@ export function BookTable({
             {books.map((book, i) => (
               <motion.tr
                 key={book.id}
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.15, delay: i * 0.02 }}
-                className="border-b border-border hover:bg-muted/30 transition-colors"
+                variants={tableRow}
+                initial="initial"
+                animate="animate"
+                exit="exit"
+                transition={{ delay: i * 0.025 }}
+                className="border-b border-border transition-colors hover:bg-muted/35"
               >
                 <TableCell className="font-medium text-foreground max-w-[200px]">
                   <span className="truncate block">{book.title}</span>

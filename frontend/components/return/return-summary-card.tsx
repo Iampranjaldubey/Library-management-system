@@ -241,10 +241,10 @@ export function ReturnSummaryCard({ transaction, previewFine }: ReturnSummaryCar
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.15 }}
-          className="rounded-2xl border border-dashed border-border/50 bg-muted/10 p-10 flex flex-col items-center gap-3 text-center"
+          className="rounded-2xl border border-dashed border-border/50 bg-muted/10 p-6 sm:p-10 flex flex-col items-center gap-3 text-center"
         >
-          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-muted/60">
-            <RotateCcw className="h-6 w-6 text-muted-foreground/30" />
+          <div className="flex h-12 w-12 sm:h-14 sm:w-14 items-center justify-center rounded-2xl bg-muted/60">
+            <RotateCcw className="h-5 w-5 sm:h-6 sm:w-6 text-muted-foreground/30" />
           </div>
           <div>
             <p className="text-sm font-medium text-muted-foreground">

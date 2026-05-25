@@ -6,16 +6,19 @@ import { useProtectedRoute } from "@/hooks/use-protected-route"
 import { useAuth } from "@/context/auth-context"
 import { useIssueForm } from "@/hooks/use-issue-form"
 import { PageHeader } from "@/components/dashboard/page-header"
+import { PageTransition } from "@/components/ui/page-transition"
+import { ShimmerSkeleton } from "@/components/ui/shimmer-skeleton"
+import { SmartErrorBanner } from "@/components/ui/error-state"
 import { BookSelect } from "@/components/issue/book-select"
 import { UserIdInput } from "@/components/issue/user-id-input"
 import { IssueSummaryCard } from "@/components/issue/issue-summary-card"
 import { IssueSuccessState } from "@/components/issue/issue-success-state"
 import { Button } from "@/components/ui/button"
+import { LoadingButton } from "@/components/ui/button-loader"
 import { Label } from "@/components/ui/label"
-import { Skeleton } from "@/components/ui/skeleton"
 import {
-  BookPlus, ShieldOff, RefreshCw, Loader2,
-  AlertCircle, BookOpen, Users,
+  BookPlus, ShieldOff, RefreshCw,
+  BookOpen, Users,
 } from "lucide-react"
 
 // ─── Loading skeleton ─────────────────────────────────────────────────────────
@@ -25,19 +28,19 @@ function IssueSkeleton() {
     <div className="max-w-2xl space-y-6">
       <div className="rounded-2xl border border-border bg-card/50 p-6 space-y-6">
         <div className="flex items-center gap-3 pb-4 border-b border-border">
-          <Skeleton className="h-10 w-10 rounded-xl" />
+          <ShimmerSkeleton className="h-10 w-10 rounded-xl" />
           <div className="space-y-2">
-            <Skeleton className="h-4 w-32" />
-            <Skeleton className="h-3 w-48" />
+            <ShimmerSkeleton className="h-4 w-32" />
+            <ShimmerSkeleton className="h-3 w-48" />
           </div>
         </div>
         <div className="space-y-2">
-          <Skeleton className="h-3 w-20" />
-          <Skeleton className="h-12 w-full rounded-xl" />
+          <ShimmerSkeleton className="h-3 w-20" />
+          <ShimmerSkeleton className="h-12 w-full rounded-xl" />
         </div>
         <div className="space-y-2">
-          <Skeleton className="h-3 w-20" />
-          <Skeleton className="h-12 w-full rounded-xl" />
+          <ShimmerSkeleton className="h-3 w-20" />
+          <ShimmerSkeleton className="h-12 w-full rounded-xl" />
         </div>
       </div>
       <div className="rounded-xl border border-dashed border-border/60 bg-muted/20 h-40" />
@@ -70,31 +73,7 @@ function AccessDenied() {
   )
 }
 
-// ─── Error banner ─────────────────────────────────────────────────────────────
 
-function ErrorBanner({ message, onRetry }: { message: string; onRetry: () => void }) {
-  return (
-    <motion.div
-      initial={{ opacity: 0, height: 0 }}
-      animate={{ opacity: 1, height: "auto" }}
-      className="flex items-start gap-3 rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3"
-    >
-      <AlertCircle className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium text-destructive">Failed to load books</p>
-        <p className="text-xs text-destructive/80 mt-0.5">{message}</p>
-      </div>
-      <Button
-        variant="ghost"
-        size="sm"
-        onClick={onRetry}
-        className="text-destructive hover:text-destructive hover:bg-destructive/10 h-7 px-2 text-xs shrink-0"
-      >
-        Retry
-      </Button>
-    </motion.div>
-  )
-}
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
@@ -132,17 +111,20 @@ export default function IssueBookPage() {
   if (authLoading) return null
   if (!canAccess) {
     return (
-      <div className="space-y-6">
-        <PageHeader title="Issue Book" description="Issue a book to a library member" />
-        <AccessDenied />
-      </div>
+      <PageTransition>
+        <div className="space-y-6">
+          <PageHeader title="Issue Book" description="Issue a book to a library member" />
+          <AccessDenied />
+        </div>
+      </PageTransition>
     )
   }
 
   // ── Main render ────────────────────────────────────────────────────────────
 
   return (
-    <div className="space-y-6">
+    <PageTransition>
+      <div className="space-y-6">
       {/* Page header */}
       <PageHeader title="Issue Book" description="Issue a book to a library member">
         <Button
@@ -158,11 +140,12 @@ export default function IssueBookPage() {
       </PageHeader>
 
       {/* Error banner */}
-      <AnimatePresence>
-        {booksError && !isBooksLoading && (
-          <ErrorBanner message={booksError} onRetry={fetchAvailableBooks} />
-        )}
-      </AnimatePresence>
+      {booksError && !isBooksLoading && (
+        <SmartErrorBanner
+          message={booksError}
+          onRetry={fetchAvailableBooks}
+        />
+      )}
 
       {/* Content */}
       <AnimatePresence mode="wait">
@@ -200,11 +183,11 @@ export default function IssueBookPage() {
               <div className="rounded-2xl border border-border bg-card/60 backdrop-blur-sm shadow-sm overflow-hidden">
 
                 {/* Card header */}
-                <div className="flex items-center gap-3 px-6 py-5 border-b border-border bg-muted/20">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 border border-primary/20">
+                <div className="flex flex-wrap items-center gap-3 px-4 sm:px-6 py-4 sm:py-5 border-b border-border bg-muted/20">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 border border-primary/20 shrink-0">
                     <BookPlus className="h-5 w-5 text-primary" />
                   </div>
-                  <div>
+                  <div className="flex-1 min-w-0">
                     <h2 className="font-semibold text-foreground">Issue Details</h2>
                     <p className="text-xs text-muted-foreground mt-0.5">
                       Select a book and member to create an issue record
@@ -213,7 +196,7 @@ export default function IssueBookPage() {
 
                   {/* Available count badge */}
                   {availableBooks.length > 0 && (
-                    <div className="ml-auto flex items-center gap-1.5 rounded-full bg-primary/10 border border-primary/20 px-3 py-1">
+                    <div className="flex items-center gap-1.5 rounded-full bg-primary/10 border border-primary/20 px-3 py-1 shrink-0">
                       <BookOpen className="h-3 w-3 text-primary" />
                       <span className="text-xs font-medium text-primary">
                         {availableBooks.length} available
@@ -223,7 +206,7 @@ export default function IssueBookPage() {
                 </div>
 
                 {/* Form fields */}
-                <div className="px-6 py-6 space-y-6">
+                <div className="px-4 sm:px-6 py-4 sm:py-6 space-y-5 sm:space-y-6">
 
                   {/* Book selector */}
                   <motion.div
@@ -296,7 +279,7 @@ export default function IssueBookPage() {
 
               {/* ── Actions ── */}
               <motion.div
-                className="flex items-center gap-3"
+                className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ delay: 0.2 }}
@@ -304,35 +287,30 @@ export default function IssueBookPage() {
                 <Button
                   type="button"
                   variant="outline"
-                  className="border-border text-foreground hover:bg-muted/50"
+                  className="border-border text-foreground hover:bg-muted/50 sm:w-auto"
                   onClick={() => resetForm(true)}
                   disabled={isSubmitting}
                 >
                   Reset
                 </Button>
 
-                <Button
+                <LoadingButton
                   type="submit"
-                  disabled={isSubmitting || !bookId || !userId}
-                  className="gap-2 bg-primary text-primary-foreground hover:bg-primary/90 min-w-[130px]"
+                  isLoading={isSubmitting}
+                  loadingText="Issuing…"
+                  showProgress
+                  disabled={!bookId || !userId}
+                  className="gap-2 bg-primary text-primary-foreground hover:bg-primary/90 sm:min-w-[130px]"
                 >
-                  {isSubmitting ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      Issuing…
-                    </>
-                  ) : (
-                    <>
-                      <BookPlus className="h-4 w-4" />
-                      Issue Book
-                    </>
-                  )}
-                </Button>
+                  <BookPlus className="h-4 w-4" />
+                  Issue Book
+                </LoadingButton>
               </motion.div>
             </form>
           </motion.div>
         )}
       </AnimatePresence>
-    </div>
+      </div>
+    </PageTransition>
   )
 }
