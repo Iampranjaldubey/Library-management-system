@@ -3,14 +3,17 @@ import { Geist, Geist_Mono } from "next/font/google"
 import { Analytics } from "@vercel/analytics/next"
 import { ThemeProvider } from "@/components/theme-provider"
 import { AuthProvider } from "@/context/auth-context"
+import { ErrorBoundary } from "@/components/error-boundary"
 import { Toaster } from "@/components/ui/sonner"
 import { DebugInit } from "@/components/debug-init"
+import { config } from "@/lib/config"
 import "./globals.css"
 
 const geist = Geist({ subsets: ["latin"], variable: "--font-geist-sans" })
 const geistMono = Geist_Mono({ subsets: ["latin"], variable: "--font-geist-mono" })
+
 export const metadata: Metadata = {
-  title: "LibraryOS — Library Management System",
+  title: `${config.appName} — Library Management System`,
   description: "Modern library management system for tracking books, users, and transactions",
   icons: {
     icon: [
@@ -26,19 +29,21 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={`${geist.variable} ${geistMono.variable} font-sans antialiased`}>
-        <ThemeProvider
-          attribute="class"
-          defaultTheme="dark"
-          enableSystem
-          disableTransitionOnChange
-        >
-          <AuthProvider>
-            {children}
-            <Toaster richColors position="top-right" />
-            <DebugInit />
-          </AuthProvider>
-        </ThemeProvider>
-        {process.env.NODE_ENV === "production" && <Analytics />}
+        <ErrorBoundary>
+          <ThemeProvider
+            attribute="class"
+            defaultTheme="dark"
+            enableSystem
+            disableTransitionOnChange
+          >
+            <AuthProvider>
+              {children}
+              <Toaster richColors position="top-right" />
+              <DebugInit />
+            </AuthProvider>
+          </ThemeProvider>
+        </ErrorBoundary>
+        {config.isProduction && <Analytics />}
       </body>
     </html>
   )

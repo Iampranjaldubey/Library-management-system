@@ -9,7 +9,11 @@
  *    status codes without string-matching error messages.
  *  - Dev-mode logging prints method, URL, status, and the parsed body so
  *    failures are immediately visible in the browser console.
+ *  - Request caching prevents duplicate simultaneous requests
  */
+
+import { config, getStorageKey, isFeatureEnabled } from "./config"
+import type { ApiResponse as ApiResponseType } from "@/types"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -35,19 +39,43 @@ export class ApiError extends Error {
   }
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// ─── Request Cache ────────────────────────────────────────────────────────────
 
-const isDev = process.env.NODE_ENV === "development"
+/**
+ * Simple request cache to prevent duplicate simultaneous requests
+ * Cache entries are automatically cleared after 1 second
+ */
+const requestCache = new Map<string, Promise<any>>()
+
+function getCacheKey(method: string, endpoint: string): string {
+  return `${method}:${endpoint}`
+}
+
+function getCachedRequest<T>(method: string, endpoint: string): Promise<T> | undefined {
+  return requestCache.get(getCacheKey(method, endpoint))
+}
+
+function setCachedRequest<T>(method: string, endpoint: string, promise: Promise<T>): void {
+  const key = getCacheKey(method, endpoint)
+  requestCache.set(key, promise)
+  
+  // Auto-clear cache entry after 1 second
+  promise.finally(() => {
+    setTimeout(() => requestCache.delete(key), 1000)
+  })
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function getToken(): string | null {
   if (typeof window === "undefined") return null
-  return localStorage.getItem("token")
+  return localStorage.getItem(getStorageKey("TOKEN"))
 }
 
 function clearSession() {
   if (typeof window === "undefined") return
-  localStorage.removeItem("token")
-  localStorage.removeItem("user")
+  localStorage.removeItem(getStorageKey("TOKEN"))
+  localStorage.removeItem(getStorageKey("USER"))
   document.cookie = "auth-token=; path=/; max-age=0"
 }
 
@@ -59,7 +87,7 @@ function devLog(
   body: unknown,
   durationMs: number
 ) {
-  if (!isDev) return
+  if (!isFeatureEnabled("ENABLE_DEBUG_LOGS")) return
   const ok = status >= 200 && status < 300
   const style = ok ? "color: #22c55e" : "color: #ef4444"
   console.groupCollapsed(
@@ -94,14 +122,24 @@ export async function apiFetch<T = unknown>(
   endpoint: string,
   options: RequestInit = {}
 ): Promise<ApiResponse<T>> {
-  const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080"
-  const url = `${baseUrl}${endpoint}`
+  const url = `${config.apiUrl}${endpoint}`
   const method = (options.method ?? "GET").toUpperCase()
+
+  // Check cache for GET requests
+  if (method === "GET") {
+    const cached = getCachedRequest<ApiResponse<T>>(method, endpoint)
+    if (cached) {
+      if (isFeatureEnabled("ENABLE_DEBUG_LOGS")) {
+        console.log(`[API] Using cached response for ${method} ${endpoint}`)
+      }
+      return cached
+    }
+  }
 
   const token = getToken()
 
   // Warn in dev if a non-auth endpoint is called without a token
-  if (isDev && !token && !endpoint.startsWith("/auth")) {
+  if (config.isDevelopment && !token && !endpoint.startsWith("/auth")) {
     console.warn(`[API] No token found for ${method} ${endpoint} — request will likely 401`)
   }
 
@@ -114,79 +152,88 @@ export async function apiFetch<T = unknown>(
 
   const t0 = Date.now()
 
-  let response: Response
-  try {
-    response = await fetch(url, { ...options, headers })
-  } catch (networkErr: unknown) {
-    const msg = networkErr instanceof Error ? networkErr.message : "Network error"
-    if (isDev) {
-      console.error(`[API] Network failure for ${method} ${url}:`, networkErr)
-    }
-    throw new ApiError(
-      "Cannot reach the server. Make sure the backend is running on " + baseUrl,
-      0,
-      { originalMessage: msg }
-    )
-  }
-
-  const duration = Date.now() - t0
-
-  // ── Parse body (always attempt, even on error responses) ──────────────────
-  let body: unknown = null
-  try {
-    body = await response.json()
-  } catch {
-    // Empty body or non-JSON (e.g. 204 No Content)
-  }
-
-  devLog(method, url, response.status, body, duration)
-
-  // ── Handle error responses ────────────────────────────────────────────────
-  if (!response.ok) {
-    // Extract the message from the parsed body (already done above)
-    let message = `${response.status} ${response.statusText}`
-    if (body && typeof body === "object" && "message" in body) {
-      const m = (body as { message: string }).message
-      if (m) message = m
-    }
-
-    if (isDev) {
-      console.error(
-        `[API] ${method} ${url} failed with ${response.status}:`,
-        message,
-        "\nFull response body:",
-        body
-      )
-    }
-
-    // 401 — token expired or invalid: clear session and redirect
-    if (response.status === 401) {
-      // Only clear session if we actually had a token (not a missing-token 401)
-      if (typeof window !== "undefined") {
-        const hadToken = !!localStorage.getItem("token")
-        clearSession()
-        if (hadToken) {
-          // Hard redirect so the auth context re-initialises cleanly
-          window.location.href = "/login"
-        }
+  const fetchPromise = (async () => {
+    let response: Response
+    try {
+      response = await fetch(url, { ...options, headers })
+    } catch (networkErr: unknown) {
+      const msg = networkErr instanceof Error ? networkErr.message : "Network error"
+      if (config.isDevelopment) {
+        console.error(`[API] Network failure for ${method} ${url}:`, networkErr)
       }
-      throw new ApiError("Session expired. Please sign in again.", 401, body)
-    }
-
-    // 403 — authenticated but not authorised for this action
-    if (response.status === 403) {
       throw new ApiError(
-        "You don't have permission to perform this action.",
-        403,
-        body
+        `Cannot reach the server. Make sure the backend is running on ${config.apiUrl}`,
+        0,
+        { originalMessage: msg }
       )
     }
 
-    throw new ApiError(message, response.status, body)
+    const duration = Date.now() - t0
+
+    // ── Parse body (always attempt, even on error responses) ──────────────────
+    let body: unknown = null
+    try {
+      body = await response.json()
+    } catch {
+      // Empty body or non-JSON (e.g. 204 No Content)
+    }
+
+    devLog(method, url, response.status, body, duration)
+
+    // ── Handle error responses ────────────────────────────────────────────────
+    if (!response.ok) {
+      // Extract the message from the parsed body (already done above)
+      let message = `${response.status} ${response.statusText}`
+      if (body && typeof body === "object" && "message" in body) {
+        const m = (body as { message: string }).message
+        if (m) message = m
+      }
+
+      if (config.isDevelopment) {
+        console.error(
+          `[API] ${method} ${url} failed with ${response.status}:`,
+          message,
+          "\nFull response body:",
+          body
+        )
+      }
+
+      // 401 — token expired or invalid: clear session and redirect
+      if (response.status === 401) {
+        // Only clear session if we actually had a token (not a missing-token 401)
+        if (typeof window !== "undefined") {
+          const hadToken = !!localStorage.getItem(getStorageKey("TOKEN"))
+          clearSession()
+          if (hadToken) {
+            // Hard redirect so the auth context re-initialises cleanly
+            window.location.href = "/login"
+          }
+        }
+        throw new ApiError("Session expired. Please sign in again.", 401, body)
+      }
+
+      // 403 — authenticated but not authorised for this action
+      if (response.status === 403) {
+        throw new ApiError(
+          "You don't have permission to perform this action.",
+          403,
+          body
+        )
+      }
+
+      throw new ApiError(message, response.status, body)
+    }
+
+    // ── Success ───────────────────────────────────────────────────────────────
+    return body as ApiResponse<T>
+  })()
+
+  // Cache GET requests
+  if (method === "GET") {
+    setCachedRequest(method, endpoint, fetchPromise)
   }
 
-  // ── Success ───────────────────────────────────────────────────────────────
-  return body as ApiResponse<T>
+  return fetchPromise
 }
 
 // ─── Utility ──────────────────────────────────────────────────────────────────
