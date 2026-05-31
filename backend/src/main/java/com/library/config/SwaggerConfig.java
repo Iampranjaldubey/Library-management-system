@@ -2,6 +2,7 @@ package com.library.config;
 
 import io.swagger.v3.oas.models.Components;
 import io.swagger.v3.oas.models.OpenAPI;
+import io.swagger.v3.oas.models.Server;
 import io.swagger.v3.oas.models.info.Contact;
 import io.swagger.v3.oas.models.info.Info;
 import io.swagger.v3.oas.models.info.License;
@@ -18,6 +19,14 @@ public class SwaggerConfig {
     @Bean
     public OpenAPI openAPI() {
         return new OpenAPI()
+                // Use a relative server URL so Swagger UI always sends requests to the
+                // same origin it was loaded from.  This means:
+                //   • localhost:8080  → requests go to http://localhost:8080
+                //   • Railway (https) → requests go to https://…railway.app
+                // No hardcoded scheme or host, so Mixed Content errors are impossible.
+                .addServersItem(new Server()
+                        .url("/")
+                        .description("Current host (works on localhost and Railway)"))
                 .info(new Info()
                         .title("Library Management System API")
                         .description("""
