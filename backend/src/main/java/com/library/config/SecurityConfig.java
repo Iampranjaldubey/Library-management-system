@@ -115,8 +115,9 @@ public class SecurityConfig {
         // NOTE: When allowCredentials is true, you CANNOT use wildcards like "https://*.vercel.app"
         // You must specify exact origins. Add your specific Vercel URL here.
         configuration.setAllowedOrigins(Arrays.asList(
-            "http://localhost:3000",
-            "https://library-management-system-psi-blue.vercel.app"
+                "http://localhost:3000",
+                "https://library-management-system-psi-blue.vercel.app",
+                "https://library-management-system-bd4s.vercel.app"  // ← add this
         ));
         
         // Allow all standard HTTP methods including OPTIONS for preflight
