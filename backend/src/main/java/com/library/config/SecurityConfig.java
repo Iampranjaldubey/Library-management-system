@@ -110,10 +110,34 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(Arrays.asList("http://localhost:3000"));
-        configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
-        configuration.setAllowedHeaders(Arrays.asList("Authorization", "Content-Type"));
+        
+        // Allow both localhost (development) and Vercel (production)
+        configuration.setAllowedOrigins(Arrays.asList(
+            "http://localhost:3000",
+            "https://library-management-system-psi-blue.vercel.app"
+        ));
+        
+        // Allow all standard HTTP methods including OPTIONS for preflight
+        configuration.setAllowedMethods(Arrays.asList(
+            "GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "PATCH"
+        ));
+        
+        // Allow all headers (important for JWT and custom headers)
+        configuration.setAllowedHeaders(Arrays.asList("*"));
+        
+        // Expose headers that the frontend might need to read
+        configuration.setExposedHeaders(Arrays.asList(
+            "Authorization", 
+            "Content-Type", 
+            "X-Total-Count"
+        ));
+        
+        // Allow credentials (cookies, authorization headers)
         configuration.setAllowCredentials(true);
+        
+        // Cache preflight response for 1 hour (3600 seconds)
+        configuration.setMaxAge(3600L);
+        
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);
         return source;
