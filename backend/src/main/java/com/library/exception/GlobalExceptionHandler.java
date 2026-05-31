@@ -89,8 +89,19 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Void>> handleAll(Exception ex) {
         log.error("Unhandled exception", ex);
+        
+        // Unwrap the root cause for better debugging
+        Throwable cause = ex;
+        while (cause.getCause() != null) {
+            cause = cause.getCause();
+        }
+        
+        // Expose root cause in response (for debugging production issues)
+        String detailedMessage = ex.getClass().getSimpleName() + " → " + cause.getMessage();
+        log.error("Root cause: {}", detailedMessage);
+        
         return ResponseEntity
                 .status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(ApiResponse.error("An unexpected error occurred. Please try again later."));
+                .body(ApiResponse.error(detailedMessage));
     }
 }
