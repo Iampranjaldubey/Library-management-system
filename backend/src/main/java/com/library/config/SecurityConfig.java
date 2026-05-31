@@ -112,9 +112,11 @@ public class SecurityConfig {
         CorsConfiguration configuration = new CorsConfiguration();
         
         // Allow both localhost (development) and Vercel (production)
-        configuration.setAllowedOriginPatterns(Arrays.asList(
-                "http://localhost:3000",
-                "https://*.vercel.app"
+        // NOTE: When allowCredentials is true, you CANNOT use wildcards like "https://*.vercel.app"
+        // You must specify exact origins. Add your specific Vercel URL here.
+        configuration.setAllowedOrigins(Arrays.asList(
+            "http://localhost:3000",
+            "https://library-management-system-psi-blue.vercel.app"
         ));
         
         // Allow all standard HTTP methods including OPTIONS for preflight
