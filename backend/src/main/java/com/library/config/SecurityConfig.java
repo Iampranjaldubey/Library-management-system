@@ -117,7 +117,8 @@ public class SecurityConfig {
         configuration.setAllowedOrigins(Arrays.asList(
                 "http://localhost:3000",
                 "https://library-management-system-psi-blue.vercel.app",
-                "https://library-management-system-bd4s.vercel.app"  // ← add this
+                "https://library-management-system-bd4s.vercel.app",
+                "https://library-management-system-46sl.vercel.app"
         ));
         
         // Allow all standard HTTP methods including OPTIONS for preflight
