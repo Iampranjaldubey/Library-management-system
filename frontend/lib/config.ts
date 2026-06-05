@@ -39,36 +39,32 @@ export const config: EnvironmentConfig = {
  * API Endpoints
  */
 export const API_ENDPOINTS = {
-  // Authentication
   auth: {
-    login: "/api/auth/login",
-    register: "/api/auth/register",
-    logout: "/api/auth/logout",
-    refresh: "/api/auth/refresh",
+    login: "/auth/login",
+    register: "/auth/register",
+    logout: "/auth/logout",
+    refresh: "/auth/refresh",
   },
   
-  // Books
   books: {
-    base: "/api/books",
-    byId: (id: number) => `/api/books/${id}`,
-    search: "/api/books/search",
-    categories: "/api/books/categories",
+    base: "/books",
+    byId: (id: number) => `/books/${id}`,
+    search: "/books/search",
+    categories: "/books/categories",
   },
   
-  // Transactions
   transactions: {
-    base: "/api/transactions",
-    byId: (id: number) => `/api/transactions/${id}`,
-    issue: "/api/transactions/issue",
-    return: "/api/transactions/return",
-    overdue: "/api/transactions/overdue",
+    base: "/transactions",
+    byId: (id: number) => `/transactions/${id}`,
+    issue: "/issue",
+    return: "/return",
+    overdue: "/transactions/overdue",
   },
   
-  // Users
   users: {
-    base: "/api/users",
-    byId: (id: number) => `/api/users/${id}`,
-    profile: "/api/users/profile",
+    base: "/users",
+    byId: (id: number) => `/users/${id}`,
+    profile: "/users/profile",
   },
 } as const
 
