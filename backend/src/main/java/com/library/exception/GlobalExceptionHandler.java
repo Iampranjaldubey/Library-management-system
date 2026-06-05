@@ -73,8 +73,7 @@ public class GlobalExceptionHandler {
                 .body(ApiResponse.error("Invalid email or password"));
     }
 
-    // ── Lazy loading (JPA session closed before proxy accessed) ───────────────
-    // This should not occur after the JOIN FETCH fix, but kept as a safety net.
+    // ── Lazy loading ──────────────────────────────────────────────────────────
     @ExceptionHandler(LazyInitializationException.class)
     public ResponseEntity<ApiResponse<Void>> handleLazyInit(LazyInitializationException ex) {
         log.error("LazyInitializationException — a JPA relation was accessed outside a session: {}",
@@ -85,23 +84,12 @@ public class GlobalExceptionHandler {
                         "Data loading error. Please restart the server and try again."));
     }
 
-    // ── 500 fallback ─────────────────────────────────────────────────────────
+    // ── 500 fallback ──────────────────────────────────────────────────────────
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Void>> handleAll(Exception ex) {
         log.error("Unhandled exception", ex);
-        
-        // Unwrap the root cause for better debugging
-        Throwable cause = ex;
-        while (cause.getCause() != null) {
-            cause = cause.getCause();
-        }
-        
-        // Expose root cause in response (for debugging production issues)
-        String detailedMessage = ex.getClass().getSimpleName() + " → " + cause.getMessage();
-        log.error("Root cause: {}", detailedMessage);
-        
         return ResponseEntity
                 .status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(ApiResponse.error(detailedMessage));
+                .body(ApiResponse.error("An unexpected error occurred. Please try again later."));
     }
 }
