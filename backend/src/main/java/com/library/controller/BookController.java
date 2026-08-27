@@ -3,6 +3,7 @@ package com.library.controller;
 import com.library.dto.request.BookRequest;
 import com.library.dto.response.ApiResponse;
 import com.library.dto.response.BookResponse;
+import com.library.dto.response.PagedResponse;
 import com.library.service.BookService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -10,6 +11,9 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -18,7 +22,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping("/books")
+@RequestMapping("/api/v1/books")
 @RequiredArgsConstructor
 @Tag(name = "Books", description = "Book catalogue management")
 @SecurityRequirement(name = "BearerAuth")
@@ -53,6 +57,26 @@ public class BookController {
         return ResponseEntity.ok(ApiResponse.success("Books fetched successfully", books));
     }
 
+    @GetMapping("/search")
+    @Operation(summary = "Search books (paginated)",
+               description = """
+                       Server-side search with pagination. Supports:
+                       - `q` — search query (matches title, author, isbn, category)
+                       - `available` — filter by availability (true/false)
+                       - `page` — page number (0-indexed, default 0)
+                       - `size` — page size (default 20, max 100)
+                       - `sort` — sort field and direction (e.g. `title,asc`)
+                       """)
+    public ResponseEntity<ApiResponse<PagedResponse<BookResponse>>> searchBooks(
+            @RequestParam(required = false) String q,
+            @RequestParam(required = false) Boolean available,
+            @PageableDefault(size = 20, sort = "title", direction = Sort.Direction.ASC)
+            Pageable pageable) {
+
+        PagedResponse<BookResponse> result = bookService.searchBooks(q, available, pageable);
+        return ResponseEntity.ok(ApiResponse.success("Books fetched successfully", result));
+    }
+
     @GetMapping("/{id}")
     @Operation(summary = "Get book by ID")
     public ResponseEntity<ApiResponse<BookResponse>> getBookById(
@@ -62,3 +86,4 @@ public class BookController {
                 ApiResponse.success("Book fetched successfully", bookService.getBookById(id)));
     }
 }
+

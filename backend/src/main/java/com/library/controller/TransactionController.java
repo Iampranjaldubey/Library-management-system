@@ -3,6 +3,7 @@ package com.library.controller;
 import com.library.dto.request.IssueRequest;
 import com.library.dto.request.ReturnRequest;
 import com.library.dto.response.ApiResponse;
+import com.library.dto.response.FinesSummaryResponse;
 import com.library.dto.response.TransactionResponse;
 import com.library.service.TransactionService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -26,7 +27,7 @@ public class TransactionController {
 
     private final TransactionService transactionService;
 
-    @PostMapping("/issue")
+    @PostMapping("/api/v1/issue")
     @PreAuthorize("hasAnyRole('ADMIN', 'LIBRARIAN')")
     @Transactional
     @Operation(summary = "Issue a book to a user",
@@ -45,7 +46,7 @@ public class TransactionController {
                 .body(ApiResponse.success("Book issued successfully", response));
     }
 
-    @PostMapping("/return")
+    @PostMapping("/api/v1/return")
     @PreAuthorize("hasAnyRole('ADMIN', 'LIBRARIAN')")
     @Transactional
     @Operation(summary = "Return a book",
@@ -62,7 +63,27 @@ public class TransactionController {
         return ResponseEntity.ok(ApiResponse.success("Book returned successfully", response));
     }
 
-    @GetMapping("/transactions")
+    @PutMapping("/api/v1/transactions/{id}/collect-fine")
+    @PreAuthorize("hasAnyRole('ADMIN', 'LIBRARIAN')")
+    @Operation(summary = "Collect fine for a transaction",
+               description = "Marks the fine as paid for a returned overdue book.")
+    public ResponseEntity<ApiResponse<TransactionResponse>> collectFine(
+            @PathVariable Long id) {
+
+        TransactionResponse response = transactionService.collectFine(id);
+        return ResponseEntity.ok(ApiResponse.success("Fine collected successfully", response));
+    }
+
+    @GetMapping("/api/v1/transactions/outstanding-fines")
+    @PreAuthorize("hasAnyRole('ADMIN', 'LIBRARIAN')")
+    @Operation(summary = "Get outstanding fines summary",
+               description = "Returns total outstanding and collected fines.")
+    public ResponseEntity<ApiResponse<FinesSummaryResponse>> getOutstandingFines() {
+        return ResponseEntity.ok(
+                ApiResponse.success("Fines summary fetched", transactionService.getOutstandingFines()));
+    }
+
+    @GetMapping("/api/v1/transactions")
     @PreAuthorize("hasAnyRole('ADMIN', 'LIBRARIAN')")
     @Transactional(readOnly = true)
     @Operation(summary = "Get all transactions",
@@ -73,7 +94,7 @@ public class TransactionController {
                         transactionService.getAllTransactions()));
     }
 
-    @GetMapping("/transactions/user/{userId}")
+    @GetMapping("/api/v1/transactions/user/{userId}")
     @PreAuthorize("hasAnyRole('ADMIN', 'LIBRARIAN')")
     @Transactional(readOnly = true)
     @Operation(summary = "Get transactions by user ID",
@@ -86,3 +107,4 @@ public class TransactionController {
                         transactionService.getTransactionsByUser(userId)));
     }
 }
+

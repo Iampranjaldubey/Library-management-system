@@ -18,5 +18,8 @@ public class TransactionResponse {
     private LocalDate dueDate;
     private LocalDate returnDate;
     private Double    fine;
+    private boolean   finePaid;
+    private LocalDate finePaymentDate;
     private String    status;   // "ACTIVE" | "RETURNED" | "OVERDUE"
 }
+

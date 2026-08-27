@@ -40,31 +40,37 @@ export const config: EnvironmentConfig = {
  */
 export const API_ENDPOINTS = {
   auth: {
-    login: "/auth/login",
-    register: "/auth/register",
-    logout: "/auth/logout",
-    refresh: "/auth/refresh",
+    login: "/api/v1/auth/login",
+    register: "/api/v1/auth/register",
+    logout: "/api/v1/auth/logout",
+    refresh: "/api/v1/auth/refresh",
   },
   
   books: {
-    base: "/books",
-    byId: (id: number) => `/books/${id}`,
-    search: "/books/search",
-    categories: "/books/categories",
+    base: "/api/v1/books",
+    byId: (id: number) => `/api/v1/books/${id}`,
+    search: "/api/v1/books/search",
+    categories: "/api/v1/books/categories",
   },
   
   transactions: {
-    base: "/transactions",
-    byId: (id: number) => `/transactions/${id}`,
-    issue: "/issue",
-    return: "/return",
-    overdue: "/transactions/overdue",
+    base: "/api/v1/transactions",
+    byId: (id: number) => `/api/v1/transactions/${id}`,
+    issue: "/api/v1/issue",
+    return: "/api/v1/return",
+    overdue: "/api/v1/transactions/overdue",
   },
   
   users: {
-    base: "/users",
-    byId: (id: number) => `/users/${id}`,
-    profile: "/users/profile",
+    base: "/api/v1/users",
+    byId: (id: number) => `/api/v1/users/${id}`,
+    profile: "/api/v1/users/profile",
+  },
+
+  admin: {
+    users: "/api/v1/admin/users",
+    userById: (id: number) => `/api/v1/admin/users/${id}`,
+    updateRole: (id: number) => `/api/v1/admin/users/${id}/role`,
   },
 } as const
 
@@ -123,9 +129,14 @@ export const ROUTES = {
   REGISTER: "/register",
   UNAUTHORIZED: "/unauthorized",
   
+  FORGOT_PASSWORD: "/forgot-password",
+  RESET_PASSWORD: "/reset-password",
+  VERIFY_EMAIL: "/verify-email",
+  
   DASHBOARD: {
     HOME: "/dashboard",
     BOOKS: "/dashboard/books",
+    MEMBERS: "/dashboard/members",
     ISSUE: "/dashboard/issue",
     RETURN: "/dashboard/return",
     TRANSACTIONS: "/dashboard/transactions",
@@ -138,6 +149,7 @@ export const ROUTES = {
 export const ROUTE_PERMISSIONS = {
   [ROUTES.DASHBOARD.HOME]: ["ADMIN", "LIBRARIAN", "USER"],
   [ROUTES.DASHBOARD.BOOKS]: ["ADMIN", "LIBRARIAN", "USER"],
+  [ROUTES.DASHBOARD.MEMBERS]: ["ADMIN", "LIBRARIAN"],
   [ROUTES.DASHBOARD.ISSUE]: ["ADMIN", "LIBRARIAN"],
   [ROUTES.DASHBOARD.RETURN]: ["ADMIN", "LIBRARIAN"],
   [ROUTES.DASHBOARD.TRANSACTIONS]: ["ADMIN", "LIBRARIAN"],

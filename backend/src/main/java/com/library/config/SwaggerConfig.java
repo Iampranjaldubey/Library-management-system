@@ -32,12 +32,14 @@ public class SwaggerConfig {
                         .description("""
                                 Production-ready REST API for a Library Management System.
                                 
+                                **API Version:** v1 — all endpoints are prefixed with `/api/v1/`
+                                
                                 **Roles:**
-                                - `ADMIN` — full access
+                                - `ADMIN` — full access (including user management)
                                 - `LIBRARIAN` — manage books, issue/return
                                 - `USER` — browse books
                                 
-                                **Authentication:** Use `/auth/login` to obtain a JWT, then click
+                                **Authentication:** Use `/api/v1/auth/login` to obtain a JWT, then click
                                 *Authorize* and enter `Bearer <token>`.
                                 """)
                         .version("1.0.0")

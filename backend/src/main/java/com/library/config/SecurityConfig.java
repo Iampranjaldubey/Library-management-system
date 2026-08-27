@@ -46,7 +46,7 @@ public class SecurityConfig {
     }
     // ── Public endpoints ──────────────────────────────────────────────────────
     private static final String[] PUBLIC_URLS = {
-            "/auth/**",
+            "/api/v1/auth/**",
             "/swagger-ui/**",
             "/swagger-ui.html",
             "/api-docs/**",
@@ -62,18 +62,18 @@ public class SecurityConfig {
             .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers(PUBLIC_URLS).permitAll()
+                // Admin endpoints — ADMIN only
+                .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
                 // Only ADMIN & LIBRARIAN can manage books (write)
-                .requestMatchers(HttpMethod.POST, "/books").hasAnyRole("ADMIN", "LIBRARIAN")
-                .requestMatchers(HttpMethod.PUT, "/books/**").hasAnyRole("ADMIN", "LIBRARIAN")
-                .requestMatchers(HttpMethod.DELETE, "/books/**").hasAnyRole("ADMIN", "LIBRARIAN")
+                .requestMatchers(HttpMethod.POST, "/api/v1/books").hasAnyRole("ADMIN", "LIBRARIAN")
+                .requestMatchers(HttpMethod.PUT, "/api/v1/books/**").hasAnyRole("ADMIN", "LIBRARIAN")
+                .requestMatchers(HttpMethod.DELETE, "/api/v1/books/**").hasAnyRole("ADMIN", "LIBRARIAN")
                 // Issue / Return — ADMIN & LIBRARIAN only
-                .requestMatchers("/issue", "/return").hasAnyRole("ADMIN", "LIBRARIAN")
+                .requestMatchers("/api/v1/issue", "/api/v1/return").hasAnyRole("ADMIN", "LIBRARIAN")
                 // All transaction endpoints — ADMIN & LIBRARIAN only
-                // Declared here at the filter level so Spring returns 403 (not 500)
-                // before method-security even fires
-                .requestMatchers("/transactions/**").hasAnyRole("ADMIN", "LIBRARIAN")
+                .requestMatchers("/api/v1/transactions/**").hasAnyRole("ADMIN", "LIBRARIAN")
                 // GET /books is open to all authenticated users
-                .requestMatchers(HttpMethod.GET, "/books/**").authenticated()
+                .requestMatchers(HttpMethod.GET, "/api/v1/books/**").authenticated()
                 .anyRequest().authenticated()
             )
             .authenticationProvider(authenticationProvider())

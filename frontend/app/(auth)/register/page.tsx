@@ -3,14 +3,13 @@
 import { useState, useEffect } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { useForm, Controller } from "react-hook-form"
+import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
-import { authService, AuthError, type Role } from "@/lib/auth"
+import { authService, AuthError } from "@/lib/auth"
 import { useAuth } from "@/context/auth-context"
 import { FormField } from "@/components/auth/form-field"
 import { PasswordInput } from "@/components/auth/password-input"
-import { RoleSelector } from "@/components/auth/role-selector"
 import { RegisterFormSkeleton } from "@/components/auth/auth-form-skeleton"
 import { LoadingButton } from "@/components/ui/button-loader"
 import { Input } from "@/components/ui/input"
@@ -36,9 +35,6 @@ const registerSchema = z
       .min(1, "Password is required")
       .min(6, "Password must be at least 6 characters"),
     confirmPassword: z.string().min(1, "Please confirm your password"),
-    role: z.enum(["ADMIN", "LIBRARIAN", "USER"] as const, {
-      required_error: "Please select a role",
-    }),
   })
   .refine((d) => d.password === d.confirmPassword, {
     message: "Passwords do not match",
@@ -64,7 +60,6 @@ export default function RegisterPage() {
   const {
     register,
     handleSubmit,
-    control,
     setError,
     formState: { errors, isSubmitting },
   } = useForm<RegisterForm>({
@@ -74,24 +69,24 @@ export default function RegisterPage() {
       email: "",
       password: "",
       confirmPassword: "",
-      role: "USER",
     },
   })
 
   const onSubmit = async (data: RegisterForm) => {
     setServerError(null)
     try {
-      const user = await authService.register({
+      // Role is no longer sent — backend defaults all public registrations to USER.
+      // Only admins can promote users via the admin panel.
+      await authService.register({
         name: data.name,
         email: data.email,
         password: data.password,
-        role: data.role as Role,
       })
-      login(user)
       toast.success("Account created!", {
-        description: `Welcome to LibraryOS, ${user.name}`,
+        description: "Please check your email for a verification link before signing in.",
+        duration: 8000,
       })
-      router.replace("/dashboard")
+      router.replace("/login")
     } catch (err) {
       if (err instanceof AuthError) {
         // Map backend field-level validation errors onto the form
@@ -100,7 +95,6 @@ export default function RegisterPage() {
             name: "name",
             email: "email",
             password: "password",
-            role: "role",
           }
           let hasFieldError = false
           Object.entries(err.fieldErrors).forEach(([field, message]) => {
@@ -199,21 +193,10 @@ export default function RegisterPage() {
           />
         </FormField>
 
-        {/* Role selector */}
-        <div className="space-y-1.5">
-          <p className="text-sm font-medium text-foreground/80">Account type</p>
-          <Controller
-            name="role"
-            control={control}
-            render={({ field }) => (
-              <RoleSelector
-                value={field.value as Role}
-                onChange={field.onChange}
-                error={errors.role?.message}
-              />
-            )}
-          />
-        </div>
+        {/* Info note about role */}
+        <p className="text-xs text-muted-foreground/70">
+          All new accounts are created with Member access. Contact your library administrator for elevated privileges.
+        </p>
 
         <LoadingButton
           type="submit"
@@ -239,3 +222,4 @@ export default function RegisterPage() {
     </div>
   )
 }
+

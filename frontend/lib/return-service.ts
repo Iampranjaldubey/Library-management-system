@@ -38,7 +38,7 @@ export const returnService = {
    *   0   — backend offline
    */
   async processReturn(transactionId: number): Promise<ReturnedResult> {
-    const res = await apiFetch<TransactionDto>("/return", {
+    const res = await apiFetch<TransactionDto>("/api/v1/return", {
       method: "POST",
       body: JSON.stringify({ transactionId }),
     })

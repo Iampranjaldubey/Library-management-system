@@ -196,22 +196,22 @@ export const ROUTES = {
 
 export const API_ENDPOINTS = {
   AUTH: {
-    LOGIN: "/auth/login",
-    REGISTER: "/auth/register",
-    LOGOUT: "/auth/logout",
-    REFRESH: "/auth/refresh",
+    LOGIN: "/api/v1/auth/login",
+    REGISTER: "/api/v1/auth/register",
+    LOGOUT: "/api/v1/auth/logout",
+    REFRESH: "/api/v1/auth/refresh",
   },
   BOOKS: {
-    BASE: "/books",
-    BY_ID: (id: number) => `/books/${id}`,
-    SEARCH: "/books/search",
+    BASE: "/api/v1/books",
+    BY_ID: (id: number) => `/api/v1/books/${id}`,
+    SEARCH: "/api/v1/books/search",
   },
   TRANSACTIONS: {
-    BASE: "/transactions",
-    BY_ID: (id: number) => `/transactions/${id}`,
-    ISSUE: "/issue",
-    RETURN: "/return",
-    BY_USER: (userId: number) => `/transactions/user/${userId}`,
+    BASE: "/api/v1/transactions",
+    BY_ID: (id: number) => `/api/v1/transactions/${id}`,
+    ISSUE: "/api/v1/issue",
+    RETURN: "/api/v1/return",
+    BY_USER: (userId: number) => `/api/v1/transactions/user/${userId}`,
   },
   USERS: {
     BASE: "/users",

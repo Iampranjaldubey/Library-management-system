@@ -1,5 +1,6 @@
 package com.library.dto.request;
 
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import lombok.Data;
 
@@ -16,4 +17,8 @@ public class BookRequest {
 
     @NotBlank(message = "Category is required")
     private String category;
+
+    @Min(value = 1, message = "Total copies must be at least 1")
+    private int totalCopies = 1;
 }
+

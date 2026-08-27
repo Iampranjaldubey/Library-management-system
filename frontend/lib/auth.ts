@@ -16,6 +16,7 @@ export interface AuthUser {
   email: string
   role: Role
   token: string
+  refreshToken: string
   type: string
 }
 
@@ -28,7 +29,6 @@ export interface RegisterPayload {
   name: string
   email: string
   password: string
-  role: Role
 }
 
 /** Field-level validation errors returned by Spring's @Valid */
@@ -74,7 +74,7 @@ async function parseAuthError(res: Response): Promise<AuthError> {
 
 export const authService = {
   async login(payload: LoginPayload): Promise<AuthUser> {
-    const res = await fetch(`${BASE_URL}/auth/login`, {
+    const res = await fetch(`${BASE_URL}/api/v1/auth/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
@@ -90,7 +90,7 @@ export const authService = {
   },
 
   async register(payload: RegisterPayload): Promise<AuthUser> {
-    const res = await fetch(`${BASE_URL}/auth/register`, {
+    const res = await fetch(`${BASE_URL}/api/v1/auth/register`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
@@ -104,4 +104,72 @@ export const authService = {
     }
     return body.data as AuthUser
   },
+
+  async refresh(refreshToken: string): Promise<AuthUser> {
+    const res = await fetch(`${BASE_URL}/api/v1/auth/refresh`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ refreshToken }),
+    })
+
+    if (!res.ok) throw await parseAuthError(res)
+
+    const body = await res.json()
+    if (!body?.data?.token) {
+      throw new AuthError("Refresh succeeded but no token received", 500)
+    }
+    return body.data as AuthUser
+  },
+
+  async forgotPassword(email: string): Promise<string> {
+    const res = await fetch(`${BASE_URL}/api/v1/auth/forgot-password`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email }),
+    })
+
+    if (!res.ok) throw await parseAuthError(res)
+
+    const body = await res.json()
+    return body?.message || "If an account exists with this email, a reset link has been sent."
+  },
+
+  async resetPassword(token: string, newPassword: string): Promise<string> {
+    const res = await fetch(`${BASE_URL}/api/v1/auth/reset-password`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token, newPassword }),
+    })
+
+    if (!res.ok) throw await parseAuthError(res)
+
+    const body = await res.json()
+    return body?.message || "Password reset successful."
+  },
+
+  async verifyEmail(token: string): Promise<string> {
+    const res = await fetch(`${BASE_URL}/api/v1/auth/verify-email?token=${encodeURIComponent(token)}`, {
+      method: "GET",
+    })
+
+    if (!res.ok) throw await parseAuthError(res)
+
+    const body = await res.json()
+    return body?.message || "Email verified successfully."
+  },
+
+  async resendVerification(email: string): Promise<string> {
+    const res = await fetch(`${BASE_URL}/api/v1/auth/resend-verification`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email }),
+    })
+
+    if (!res.ok) throw await parseAuthError(res)
+
+    const body = await res.json()
+    return body?.message || "Verification email sent."
+  },
 }
+
+

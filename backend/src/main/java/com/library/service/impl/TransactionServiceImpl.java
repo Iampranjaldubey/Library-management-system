@@ -2,6 +2,7 @@ package com.library.service.impl;
 
 import com.library.dto.request.IssueRequest;
 import com.library.dto.request.ReturnRequest;
+import com.library.dto.response.FinesSummaryResponse;
 import com.library.dto.response.TransactionResponse;
 import com.library.entity.Book;
 import com.library.entity.Transaction;
@@ -41,9 +42,9 @@ public class TransactionServiceImpl implements TransactionService {
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Book not found with id: " + request.getBookId()));
 
-        if (!book.isAvailable()) {
+        if (book.getAvailableCopies() <= 0) {
             throw new BadRequestException(
-                    "Book '" + book.getTitle() + "' is currently not available for issue");
+                    "Book '" + book.getTitle() + "' has no available copies for issue");
         }
 
         User user = userRepository.findById(request.getUserId())
@@ -53,8 +54,8 @@ public class TransactionServiceImpl implements TransactionService {
         LocalDate today   = LocalDate.now();
         LocalDate dueDate = today.plusDays(LOAN_PERIOD_DAYS);
 
-        // Mark book as unavailable
-        book.setAvailable(false);
+        // Decrement available copies
+        book.setAvailableCopies(book.getAvailableCopies() - 1);
         bookRepository.save(book);
 
         Transaction tx = Transaction.builder()
@@ -65,7 +66,8 @@ public class TransactionServiceImpl implements TransactionService {
                 .build();
 
         Transaction saved = transactionRepository.save(tx);
-        log.info("Book '{}' issued to user '{}'. Due: {}", book.getTitle(), user.getEmail(), dueDate);
+        log.info("Book '{}' issued to user '{}'. Due: {} (copies remaining: {})",
+                book.getTitle(), user.getEmail(), dueDate, book.getAvailableCopies());
         return toResponse(saved);
     }
 
@@ -96,14 +98,71 @@ public class TransactionServiceImpl implements TransactionService {
         }
         tx.setFine(fine > 0 ? fine : null);
 
-        // Mark book as available again
+        // Increment available copies
         Book book = tx.getBook();
-        book.setAvailable(true);
+        book.setAvailableCopies(book.getAvailableCopies() + 1);
         bookRepository.save(book);
 
         transactionRepository.save(tx);
         log.info("Book '{}' returned by user '{}'", book.getTitle(), tx.getUser().getEmail());
         return toResponse(tx);
+    }
+
+    // ── Fine Collection ───────────────────────────────────────────────────────
+    @Override
+    @Transactional
+    public TransactionResponse collectFine(Long transactionId) {
+        Transaction tx = transactionRepository.findByIdWithDetails(transactionId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Transaction not found with id: " + transactionId));
+
+        if (tx.getFine() == null || tx.getFine() <= 0) {
+            throw new BadRequestException("No fine to collect for this transaction");
+        }
+        if (tx.isFinePaid()) {
+            throw new BadRequestException("Fine has already been collected for this transaction");
+        }
+
+        tx.setFinePaid(true);
+        tx.setFinePaymentDate(LocalDate.now());
+        transactionRepository.save(tx);
+
+        log.info("Fine of ₹{} collected for transaction {}", tx.getFine(), tx.getId());
+        return toResponse(tx);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public FinesSummaryResponse getOutstandingFines() {
+        List<Transaction> allWithFines = transactionRepository.findAllWithDetails()
+                .stream()
+                .filter(tx -> tx.getFine() != null && tx.getFine() > 0)
+                .toList();
+
+        double totalOutstanding = allWithFines.stream()
+                .filter(tx -> !tx.isFinePaid())
+                .mapToDouble(Transaction::getFine)
+                .sum();
+
+        double totalCollected = allWithFines.stream()
+                .filter(Transaction::isFinePaid)
+                .mapToDouble(Transaction::getFine)
+                .sum();
+
+        long outstandingCount = allWithFines.stream()
+                .filter(tx -> !tx.isFinePaid())
+                .count();
+
+        long collectedCount = allWithFines.stream()
+                .filter(Transaction::isFinePaid)
+                .count();
+
+        return FinesSummaryResponse.builder()
+                .totalOutstanding(totalOutstanding)
+                .totalCollected(totalCollected)
+                .outstandingCount(outstandingCount)
+                .collectedCount(collectedCount)
+                .build();
     }
 
     // ── Queries ───────────────────────────────────────────────────────────────
@@ -148,7 +207,10 @@ public class TransactionServiceImpl implements TransactionService {
                 .dueDate(tx.getDueDate())
                 .returnDate(tx.getReturnDate())
                 .fine(tx.getFine())
+                .finePaid(tx.isFinePaid())
+                .finePaymentDate(tx.getFinePaymentDate())
                 .status(status)
                 .build();
     }
 }
+

@@ -198,9 +198,54 @@ export async function apiFetch<T = unknown>(
         )
       }
 
-      // 401 — token expired or invalid: clear session and redirect
+      // 401 — token expired or invalid: attempt silent refresh
       if (response.status === 401) {
-        // Only clear session if we actually had a token (not a missing-token 401)
+        // Try to refresh token
+        let userStr = typeof window !== "undefined" ? localStorage.getItem(getStorageKey("USER")) : null
+        
+        if (userStr) {
+          try {
+             const user = JSON.parse(userStr)
+             if (user.refreshToken && !endpoint.includes("/refresh")) {
+                if (config.isDevelopment) {
+                   console.log(`[API] Attempting silent token refresh`)
+                }
+                
+                // Do the refresh call using native fetch to avoid recursive apiFetch loops
+                const refreshRes = await fetch(`${config.apiUrl}/api/v1/auth/refresh`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ refreshToken: user.refreshToken }),
+                })
+                
+                if (refreshRes.ok) {
+                   const refreshBody = await refreshRes.json()
+                   if (refreshBody?.data?.token) {
+                      // Update local storage
+                      const newUser = refreshBody.data
+                      localStorage.setItem(getStorageKey("TOKEN"), newUser.token)
+                      localStorage.setItem(getStorageKey("USER"), JSON.stringify(newUser))
+                      document.cookie = `auth-token=${newUser.token}; path=/; SameSite=Lax; max-age=${60 * 60 * 24 * 7}`
+                      
+                      // Retry the original request
+                      const retryHeaders = {
+                        ...headers,
+                        Authorization: `Bearer ${newUser.token}`
+                      }
+                      const retryRes = await fetch(url, { ...options, headers: retryHeaders })
+                      if (retryRes.ok) {
+                         const retryBody = await retryRes.json()
+                         return retryBody as ApiResponse<T>
+                      }
+                   }
+                }
+             }
+          } catch (e) {
+             console.error("[API] Failed to parse user or refresh token", e)
+          }
+        }
+        
+        // Refresh failed or no refresh token available: clear session and redirect
         if (typeof window !== "undefined") {
           const hadToken = !!localStorage.getItem(getStorageKey("TOKEN"))
           clearSession()
@@ -265,6 +310,8 @@ export interface BookDto {
   isbn: string
   category: string
   available: boolean
+  totalCopies: number
+  availableCopies: number
 }
 
 export interface TransactionDto {
@@ -280,12 +327,15 @@ export interface TransactionDto {
   /** ISO date string "YYYY-MM-DD" or null */
   returnDate: string | null
   fine: number | null
+  finePaid: boolean
+  finePaymentDate: string | null
   /** Backend-computed status — use this instead of recomputing on the client */
   status: "ACTIVE" | "RETURNED" | "OVERDUE"
 }
 
 export interface AuthDto {
   token: string
+  refreshToken: string
   type: string
   id: number
   name: string
@@ -293,19 +343,57 @@ export interface AuthDto {
   role: string
 }
 
+export interface PagedResponse<T> {
+  content: T[]
+  page: number
+  size: number
+  totalElements: number
+  totalPages: number
+  first: boolean
+  last: boolean
+}
+
+export interface FinesSummaryDto {
+  totalOutstanding: number
+  totalCollected: number
+  outstandingCount: number
+  collectedCount: number
+}
+
 // ─── Auth API ─────────────────────────────────────────────────────────────────
 
 export const authApi = {
   login: (email: string, password: string) =>
-    apiFetch<AuthDto>("/auth/login", {
+    apiFetch<AuthDto>("/api/v1/auth/login", {
       method: "POST",
       body: JSON.stringify({ email, password }),
     }),
 
-  register: (name: string, email: string, password: string, role: string) =>
-    apiFetch<AuthDto>("/auth/register", {
+  register: (name: string, email: string, password: string) =>
+    apiFetch<AuthDto>("/api/v1/auth/register", {
       method: "POST",
-      body: JSON.stringify({ name, email, password, role }),
+      body: JSON.stringify({ name, email, password }),
+    }),
+
+  forgotPassword: (email: string) =>
+    apiFetch<void>("/api/v1/auth/forgot-password", {
+      method: "POST",
+      body: JSON.stringify({ email }),
+    }),
+
+  resetPassword: (token: string, newPassword: string) =>
+    apiFetch<void>("/api/v1/auth/reset-password", {
+      method: "POST",
+      body: JSON.stringify({ token, newPassword }),
+    }),
+
+  verifyEmail: (token: string) =>
+    apiFetch<void>(`/api/v1/auth/verify-email?token=${encodeURIComponent(token)}`),
+
+  resendVerification: (email: string) =>
+    apiFetch<void>("/api/v1/auth/resend-verification", {
+      method: "POST",
+      body: JSON.stringify({ email }),
     }),
 }
 
@@ -314,13 +402,13 @@ export const authApi = {
 export const booksApi = {
   getAll: (available?: boolean) => {
     const query = available !== undefined ? `?available=${available}` : ""
-    return apiFetch<BookDto[]>(`/books${query}`)
+    return apiFetch<BookDto[]>(`/api/v1/books${query}`)
   },
 
-  getById: (id: number) => apiFetch<BookDto>(`/books/${id}`),
+  getById: (id: number) => apiFetch<BookDto>(`/api/v1/books/${id}`),
 
-  add: (book: { title: string; author: string; isbn: string; category: string }) =>
-    apiFetch<BookDto>("/books", {
+  add: (book: { title: string; author: string; isbn: string; category: string; totalCopies?: number }) =>
+    apiFetch<BookDto>("/api/v1/books", {
       method: "POST",
       body: JSON.stringify(book),
     }),
@@ -329,53 +417,95 @@ export const booksApi = {
     id: number,
     book: { title: string; author: string; isbn: string; category: string }
   ) =>
-    apiFetch<BookDto>(`/books/${id}`, {
+    apiFetch<BookDto>(`/api/v1/books/${id}`, {
       method: "PUT",
       body: JSON.stringify(book),
     }),
 
   delete: (id: number) =>
-    apiFetch<void>(`/books/${id}`, { method: "DELETE" }),
+    apiFetch<void>(`/api/v1/books/${id}`, { method: "DELETE" }),
 }
 
 // ─── Transactions API ─────────────────────────────────────────────────────────
 
 export const transactionsApi = {
   issue: (bookId: number, userId: number) =>
-    apiFetch<TransactionDto>("/issue", {
+    apiFetch<TransactionDto>("/api/v1/issue", {
       method: "POST",
       body: JSON.stringify({ bookId, userId }),
     }),
 
   return: (transactionId: number) =>
-    apiFetch<TransactionDto>("/return", {
+    apiFetch<TransactionDto>("/api/v1/return", {
       method: "POST",
       body: JSON.stringify({ transactionId }),
     }),
 
-  getAll: () => apiFetch<TransactionDto[]>("/transactions"),
+  getAll: () => apiFetch<TransactionDto[]>("/api/v1/transactions"),
 
   getByUser: (userId: number) =>
-    apiFetch<TransactionDto[]>(`/transactions/user/${userId}`),
+    apiFetch<TransactionDto[]>(`/api/v1/transactions/user/${userId}`),
+
+  collectFine: (transactionId: number) =>
+    apiFetch<TransactionDto>(`/api/v1/transactions/${transactionId}/collect-fine`, {
+      method: "PUT",
+    }),
+
+  getOutstandingFines: () =>
+    apiFetch<FinesSummaryDto>("/api/v1/transactions/outstanding-fines"),
 }
 
 // ─── Users API ────────────────────────────────────────────────────────────────
-// NOTE: The backend does not currently expose a GET /users endpoint.
-// These methods are stubs ready for when the endpoint is added.
 
 export interface UserDto {
   id: number
   name: string
   email: string
   role: string
+  memberId: string
+  active: boolean
+  createdAt: string
+  activeLoans: number
 }
 
 export const usersApi = {
+  getAll: (q?: string, page = 0, size = 20) => {
+    const params = new URLSearchParams()
+    if (q) params.set("q", q)
+    params.set("page", String(page))
+    params.set("size", String(size))
+    return apiFetch<PagedResponse<UserDto>>(`/api/v1/admin/users?${params}`)
+  },
+
+  getById: (id: number) =>
+    apiFetch<UserDto>(`/api/v1/admin/users/${id}`),
+
+  update: (id: number, data: { name?: string; email?: string }) =>
+    apiFetch<UserDto>(`/api/v1/admin/users/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+
+  updateRole: (id: number, role: string) =>
+    apiFetch<UserDto>(`/api/v1/admin/users/${id}/role`, {
+      method: "PUT",
+      body: JSON.stringify({ role }),
+    }),
+
+  deactivate: (id: number) =>
+    apiFetch<UserDto>(`/api/v1/admin/users/${id}/deactivate`, { method: "PUT" }),
+
+  activate: (id: number) =>
+    apiFetch<UserDto>(`/api/v1/admin/users/${id}/activate`, { method: "PUT" }),
+
+  getTransactions: (id: number) =>
+    apiFetch<TransactionDto[]>(`/api/v1/admin/users/${id}/transactions`),
+
   /** Validate a user exists by fetching their active transactions.
    *  Returns null if the user is not found (404). */
   validateById: async (userId: number): Promise<boolean> => {
     try {
-      await apiFetch(`/transactions/user/${userId}`)
+      await apiFetch(`/api/v1/transactions/user/${userId}`)
       return true
     } catch (err) {
       if (err instanceof ApiError && err.status === 404) return false
@@ -383,3 +513,4 @@ export const usersApi = {
     }
   },
 }
+

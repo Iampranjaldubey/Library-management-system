@@ -32,4 +32,11 @@ public class Transaction {
 
     // Fine in rupees — computed on return; null while book is still issued
     private Double fine;
+
+    @Column(nullable = false)
+    @Builder.Default
+    private boolean finePaid = false;
+
+    private LocalDate finePaymentDate;
 }
+

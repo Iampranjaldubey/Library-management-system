@@ -13,4 +13,7 @@ public class BookResponse {
     private String  isbn;
     private String  category;
     private boolean available;
+    private int     totalCopies;
+    private int     availableCopies;
 }
+

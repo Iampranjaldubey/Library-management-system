@@ -27,5 +27,17 @@ public class Book {
 
     @Column(nullable = false)
     @Builder.Default
-    private boolean available = true;
+    private int totalCopies = 1;
+
+    @Column(nullable = false)
+    @Builder.Default
+    private int availableCopies = 1;
+
+    /**
+     * Backward-compatible convenience method.
+     * A book is "available" if at least one copy can be issued.
+     */
+    public boolean isAvailable() {
+        return availableCopies > 0;
+    }
 }
