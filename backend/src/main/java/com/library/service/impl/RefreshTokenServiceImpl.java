@@ -32,6 +32,7 @@ public class RefreshTokenServiceImpl implements RefreshTokenService {
         // Revoke existing tokens for the user to ensure single active session per user
         // (If multiple device support is needed, this logic can be modified)
         refreshTokenRepository.deleteByUser(user);
+        refreshTokenRepository.flush();
 
         RefreshToken refreshToken = RefreshToken.builder()
                 .user(user)
