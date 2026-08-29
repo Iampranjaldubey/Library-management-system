@@ -39,6 +39,8 @@ services:
       DB_PASSWORD: library_pass
       JWT_SECRET: "dGhpc2lzYXZlcnlzdHJvbmdzZWNyZXRrZXlmb3JsaWJyYXJ5bWFuYWdlbWVudHN5c3RlbTIwMjQ="
       PORT: "8080"
+      # Local dev only: allow login without SMTP email verification.
+      APP_AUTH_REQUIRE_EMAIL_VERIFICATION: "false"
     ports:
       - "8080:8080"
 
