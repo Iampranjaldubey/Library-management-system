@@ -4,9 +4,11 @@ import com.library.dto.request.BookRequest;
 import com.library.dto.response.BookResponse;
 import com.library.dto.response.PagedResponse;
 import com.library.entity.Book;
+import com.library.exception.BadRequestException;
 import com.library.exception.DuplicateResourceException;
 import com.library.exception.ResourceNotFoundException;
 import com.library.repository.BookRepository;
+import com.library.repository.TransactionRepository;
 import com.library.service.BookService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -22,7 +24,8 @@ import java.util.List;
 @Slf4j
 public class BookServiceImpl implements BookService {
 
-    private final BookRepository bookRepository;
+    private final BookRepository        bookRepository;
+    private final TransactionRepository transactionRepository;
 
     @Override
     @Transactional
@@ -46,6 +49,46 @@ public class BookServiceImpl implements BookService {
         Book saved = bookRepository.save(book);
         log.info("Book added: '{}' (ISBN: {}, copies: {})", saved.getTitle(), saved.getIsbn(), copies);
         return toResponse(saved);
+    }
+
+    @Override
+    @Transactional
+    public BookResponse updateBook(Long id, BookRequest request) {
+        Book book = fetchBook(id);
+
+        // Enforce ISBN uniqueness only when the ISBN actually changes
+        if (!book.getIsbn().equals(request.getIsbn())
+                && bookRepository.existsByIsbn(request.getIsbn())) {
+            throw new DuplicateResourceException(
+                    "Book with ISBN " + request.getIsbn() + " already exists");
+        }
+
+        book.setTitle(request.getTitle());
+        book.setAuthor(request.getAuthor());
+        book.setIsbn(request.getIsbn());
+        book.setCategory(request.getCategory());
+        // Copy counts are managed via the add flow and issue/return, not this edit endpoint.
+
+        Book saved = bookRepository.save(book);
+        log.info("Book updated: '{}' (ISBN: {}, id: {})", saved.getTitle(), saved.getIsbn(), id);
+        return toResponse(saved);
+    }
+
+    @Override
+    @Transactional
+    public void deleteBook(Long id) {
+        Book book = fetchBook(id);
+
+        // A book referenced by any transaction cannot be removed — this preserves
+        // borrowing history and respects the transactions→books foreign key.
+        if (transactionRepository.existsByBookId(id)) {
+            throw new BadRequestException(
+                    "Cannot delete '" + book.getTitle()
+                    + "' because it has transaction history.");
+        }
+
+        bookRepository.delete(book);
+        log.info("Book deleted: '{}' (id: {})", book.getTitle(), id);
     }
 
     @Override
