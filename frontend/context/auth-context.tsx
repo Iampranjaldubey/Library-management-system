@@ -10,6 +10,7 @@ import React, {
 } from "react"
 import { useRouter } from "next/navigation"
 import type { AuthUser, Role } from "@/lib/auth"
+import { getStorageKey } from "@/lib/config"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -43,8 +44,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Hydrate from localStorage on mount
   useEffect(() => {
     try {
-      const token = localStorage.getItem("token")
-      const stored = localStorage.getItem("user")
+      const token = localStorage.getItem(getStorageKey("TOKEN"))
+      const stored = localStorage.getItem(getStorageKey("USER"))
       if (token && stored) {
         const parsed = JSON.parse(stored) as AuthUser
         // Basic sanity check — make sure the stored object has the fields we need
@@ -57,8 +58,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
       }
     } catch {
-      localStorage.removeItem("token")
-      localStorage.removeItem("user")
+      localStorage.removeItem(getStorageKey("TOKEN"))
+      localStorage.removeItem(getStorageKey("USER"))
       document.cookie = "auth-token=; path=/; max-age=0"
     } finally {
       setIsLoading(false)
@@ -66,8 +67,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   const login = useCallback((userData: AuthUser) => {
-    localStorage.setItem("token", userData.token)
-    localStorage.setItem("user", JSON.stringify(userData))
+    localStorage.setItem(getStorageKey("TOKEN"), userData.token)
+    localStorage.setItem(getStorageKey("USER"), JSON.stringify(userData))
     // Write a cookie so the middleware can gate server-side navigation.
     // SameSite=Lax is safe here; HttpOnly=false so JS can clear it on logout.
     document.cookie = `auth-token=${userData.token}; path=/; SameSite=Lax; max-age=${60 * 60 * 24 * 7}`
@@ -75,8 +76,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   const logout = useCallback(() => {
-    localStorage.removeItem("token")
-    localStorage.removeItem("user")
+    localStorage.removeItem(getStorageKey("TOKEN"))
+    localStorage.removeItem(getStorageKey("USER"))
     // Expire the middleware cookie
     document.cookie = "auth-token=; path=/; max-age=0"
     setUser(null)
