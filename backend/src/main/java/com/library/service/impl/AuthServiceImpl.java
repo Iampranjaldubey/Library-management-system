@@ -14,6 +14,7 @@ import com.library.service.EmailVerificationService;
 import com.library.service.RefreshTokenService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -31,6 +32,9 @@ public class AuthServiceImpl implements AuthService {
     private final AuthenticationManager   authenticationManager;
     private final RefreshTokenService     refreshTokenService;
     private final EmailVerificationService emailVerificationService;
+
+    @Value("${app.auth.require-email-verification:true}")
+    private boolean requireEmailVerification;
 
     @Override
     @Transactional
@@ -53,7 +57,7 @@ public class AuthServiceImpl implements AuthService {
                 .password(passwordEncoder.encode(request.getPassword()))
                 .role(Role.USER)
                 .memberId(memberId)
-                .emailVerified(false)
+                .emailVerified(!requireEmailVerification)
                 .active(true)
                 .build();
 
@@ -61,7 +65,9 @@ public class AuthServiceImpl implements AuthService {
         log.info("New user registered: {} ({}) — member ID: {}", saved.getEmail(), saved.getRole(), memberId);
 
         // Send verification email (async — doesn't block the response)
-        emailVerificationService.sendVerification(saved);
+        if (requireEmailVerification) {
+            emailVerificationService.sendVerification(saved);
+        }
 
         // Return a response with token even though user is unverified.
         // The frontend will show a "check your email" message.
@@ -78,7 +84,7 @@ public class AuthServiceImpl implements AuthService {
         User user = userRepository.findByEmail(request.getEmail())
                 .orElseThrow(() -> new BadRequestException("Invalid email or password"));
 
-        if (!user.isEmailVerified()) {
+        if (requireEmailVerification && !user.isEmailVerified()) {
             throw new BadRequestException(
                     "Please verify your email before logging in. Check your inbox for a verification link.");
         }
