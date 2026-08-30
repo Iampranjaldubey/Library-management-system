@@ -17,9 +17,9 @@ TypeScript on the front.
 ## 🌐 Live Demo
 
 - **Frontend**: https://library-management-system-46sl.vercel.app
-- **Backend API (Swagger)**: https://library-management-system-production-1e10.up.railway.app/swagger-ui/index.html
+- **Backend API**: self-hostable in minutes — see [Deploy for free](#-deploy-for-free-render--aiven). _(The prior Railway free instance was retired when Railway ended its free plan.)_
 
-> **Live demo login** — Admin: `pranjal@gmail.com` / `123456`
+> **Demo login** — Admin: `pranjal@gmail.com` / `123456`
 
 ### Or run the whole stack in one command
 
@@ -144,6 +144,19 @@ cd backend
 ./mvnw spring-boot:run
 ```
 Schema is managed by **Flyway** (`ddl-auto=validate`) — no `ddl-auto=update`.
+
+---
+
+## 🚀 Deploy for free (Render + Aiven)
+
+The frontend runs on Vercel; the API is a Docker service and the DB is MySQL. A free setup:
+
+1. **Database — [Aiven for MySQL](https://aiven.io/free-mysql-database)** (free, no card). Create a MySQL service and note host/port/db/user/password. Your `DB_URL` is `jdbc:mysql://<host>:<port>/<database>?ssl-mode=REQUIRED`.
+2. **API — [Render](https://render.com) (Docker, free).** This repo ships a [`render.yaml`](render.yaml) blueprint: in Render, **New → Blueprint** and pick this repo. Set the prompted secrets — `DB_URL`, `DB_USERNAME`, `DB_PASSWORD`, `JWT_SECRET` (`openssl rand -base64 48`), `FRONTEND_URL`. Flyway migrates on first boot; the health check is `/api/v1/health`. (Free services sleep after ~15 min idle and cold-start in ~1 min.)
+3. **Frontend — Vercel.** Set `BACKEND_API_URL` to the Render URL. The app proxies `/api/*` same-origin (`next.config.mjs`), so the HttpOnly refresh cookie stays first-party across the Vercel → Render hop.
+4. Update the demo links above once the API URL is stable.
+
+Full env reference: [`backend/.env.example`](backend/.env.example).
 
 ---
 

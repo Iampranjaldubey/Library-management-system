@@ -1,0 +1,37 @@
+# Render Blueprint — deploys the Spring Boot API as a Docker web service.
+# Docs: https://render.com/docs/blueprint-spec
+#
+# The database is NOT defined here: Render's free managed DB is Postgres-only,
+# so use an external free MySQL (e.g. Aiven) and paste its connection details
+# into the DB_* env vars below. See the README "Deploy for free" section.
+
+services:
+  - type: web
+    name: libraryos-api
+    runtime: docker
+    plan: free
+    region: oregon
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    healthCheckPath: /api/v1/health
+    autoDeploy: true
+    envVars:
+      # ── Secrets: set these in the Render dashboard (not committed) ──
+      - key: DB_URL          # e.g. jdbc:mysql://<host>:<port>/<db>?ssl-mode=REQUIRED
+        sync: false
+      - key: DB_USERNAME
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
+      - key: JWT_SECRET      # Base64, decodes to >= 32 bytes: openssl rand -base64 48
+        sync: false
+      - key: FRONTEND_URL    # https://<your-app>.vercel.app  (used for email links)
+        sync: false
+      # ── Refresh-token cookie (works with the Vercel same-origin proxy) ──
+      - key: REFRESH_COOKIE_SECURE
+        value: "true"
+      - key: REFRESH_COOKIE_SAMESITE
+        value: "None"
+      # ── Demo-friendly: allow login without SMTP. Set "true" + MAIL_* for real email. ──
+      - key: APP_AUTH_REQUIRE_EMAIL_VERIFICATION
+        value: "false"

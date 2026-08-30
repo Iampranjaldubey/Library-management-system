@@ -52,6 +52,7 @@ public class SecurityConfig {
     // ── Public endpoints ──────────────────────────────────────────────────────
     private static final String[] PUBLIC_URLS = {
             "/api/v1/auth/**",
+            "/api/v1/health",
             "/swagger-ui/**",
             "/swagger-ui.html",
             "/api-docs/**",
