@@ -14,5 +14,6 @@ public interface TransactionService {
     FinesSummaryResponse getOutstandingFines();
     List<TransactionResponse> getTransactionsByUser(Long userId);
     List<TransactionResponse> getAllTransactions();
+    TransactionResponse getTransaction(Long id);
 }
 

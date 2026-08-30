@@ -458,6 +458,36 @@ export const transactionsApi = {
     apiFetch<FinesSummaryDto>("/api/v1/transactions/outstanding-fines"),
 }
 
+/**
+ * Downloads a transaction's PDF receipt and saves it via the browser.
+ * The endpoint returns binary (application/pdf), so this bypasses apiFetch
+ * (which parses JSON) and streams the blob directly.
+ */
+export async function downloadTransactionReceipt(id: number): Promise<void> {
+  if (typeof window === "undefined") return
+
+  const token = localStorage.getItem(getStorageKey("TOKEN"))
+  const res = await fetch(`${config.apiUrl}/api/v1/transactions/${id}/receipt`, {
+    method: "GET",
+    credentials: "include",
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  })
+
+  if (!res.ok) {
+    throw new ApiError("Failed to download the receipt.", res.status)
+  }
+
+  const blob = await res.blob()
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement("a")
+  link.href = url
+  link.download = `receipt-${id}.pdf`
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  URL.revokeObjectURL(url)
+}
+
 // ─── Users API ────────────────────────────────────────────────────────────────
 
 export interface UserDto {

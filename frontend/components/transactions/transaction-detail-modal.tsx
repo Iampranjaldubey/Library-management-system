@@ -1,5 +1,6 @@
 "use client"
 
+import { useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { modalContent } from "@/lib/animations"
 import {
@@ -12,10 +13,12 @@ import {
 import { TransactionStatusBadge } from "@/components/transactions/transaction-status-badge"
 import {
   BookOpen, User, Calendar, Clock,
-  RotateCcw, IndianRupee, Hash, ArrowLeftRight,
+  RotateCcw, IndianRupee, Hash, ArrowLeftRight, Download, Loader2,
 } from "lucide-react"
 import { format, parseISO, differenceInCalendarDays } from "date-fns"
+import { toast } from "sonner"
 import { cn } from "@/lib/utils"
+import { downloadTransactionReceipt } from "@/lib/api"
 import type { TransactionRow } from "@/lib/transaction-service"
 
 // ─── Detail row ───────────────────────────────────────────────────────────────
@@ -61,12 +64,26 @@ export function TransactionDetailModal({
   open,
   onClose,
 }: TransactionDetailModalProps) {
+  const [downloading, setDownloading] = useState(false)
+
   if (!tx) return null
 
   const overdueDays =
     tx.status === "OVERDUE"
       ? differenceInCalendarDays(new Date(), parseISO(tx.dueDate))
       : 0
+
+  const handleDownloadReceipt = async () => {
+    setDownloading(true)
+    try {
+      await downloadTransactionReceipt(tx.id)
+      toast.success("Receipt downloaded")
+    } catch {
+      toast.error("Couldn't download the receipt", { description: "Please try again." })
+    } finally {
+      setDownloading(false)
+    }
+  }
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
@@ -222,6 +239,23 @@ export function TransactionDetailModal({
                     </div>
                   </>
                 )}
+
+                {/* Receipt download */}
+                <div className="pt-1">
+                  <button
+                    type="button"
+                    onClick={handleDownloadReceipt}
+                    disabled={downloading}
+                    className="flex w-full items-center justify-center gap-2 rounded-xl border border-border bg-muted/40 px-4 py-2.5 text-xs font-semibold text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {downloading ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Download className="h-3.5 w-3.5" />
+                    )}
+                    {downloading ? "Preparing…" : "Download receipt (PDF)"}
+                  </button>
+                </div>
               </div>
             </motion.div>
           )}

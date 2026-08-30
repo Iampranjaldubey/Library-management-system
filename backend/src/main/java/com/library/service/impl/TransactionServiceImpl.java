@@ -272,6 +272,15 @@ public class TransactionServiceImpl implements TransactionService {
 
     @Override
     @Transactional(readOnly = true)
+    public TransactionResponse getTransaction(Long id) {
+        Transaction tx = transactionRepository.findByIdWithDetails(id)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Transaction not found with id: " + id));
+        return toResponse(tx);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public List<TransactionResponse> getAllTransactions() {
         // Use JOIN FETCH query to avoid LazyInitializationException
         // (user and book are LAZY — plain findAll() closes the session before mapping)
