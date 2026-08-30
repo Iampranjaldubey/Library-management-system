@@ -1,8 +1,10 @@
 package com.library.config;
 
 import com.library.repository.UserRepository;
+import com.library.security.JwtAccessDeniedHandler;
 import com.library.security.JwtAuthEntryPoint;
 import com.library.security.JwtAuthenticationFilter;
+import jakarta.servlet.DispatcherType;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Lazy;
@@ -35,14 +37,17 @@ public class SecurityConfig {
     @Lazy
     private final JwtAuthenticationFilter jwtAuthFilter;
     private final JwtAuthEntryPoint       jwtAuthEntryPoint;
+    private final JwtAccessDeniedHandler  jwtAccessDeniedHandler;
     private final UserRepository          userRepository;
 
     public SecurityConfig(@Lazy JwtAuthenticationFilter jwtAuthFilter,
                           JwtAuthEntryPoint jwtAuthEntryPoint,
+                          JwtAccessDeniedHandler jwtAccessDeniedHandler,
                           UserRepository userRepository) {
-        this.jwtAuthFilter     = jwtAuthFilter;
-        this.jwtAuthEntryPoint = jwtAuthEntryPoint;
-        this.userRepository    = userRepository;
+        this.jwtAuthFilter          = jwtAuthFilter;
+        this.jwtAuthEntryPoint      = jwtAuthEntryPoint;
+        this.jwtAccessDeniedHandler = jwtAccessDeniedHandler;
+        this.userRepository         = userRepository;
     }
     // ── Public endpoints ──────────────────────────────────────────────────────
     private static final String[] PUBLIC_URLS = {
@@ -58,9 +63,15 @@ public class SecurityConfig {
         http
             .cors(cors -> cors.configurationSource(corsConfigurationSource()))
             .csrf(AbstractHttpConfigurer::disable)
-            .exceptionHandling(ex -> ex.authenticationEntryPoint(jwtAuthEntryPoint))
+            .exceptionHandling(ex -> ex
+                    .authenticationEntryPoint(jwtAuthEntryPoint)
+                    .accessDeniedHandler(jwtAccessDeniedHandler))
             .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
+                // Permit internal ERROR/FORWARD dispatches so error responses render
+                // with their real status instead of being re-evaluated as anonymous
+                // (which otherwise turns a 403/404 into a misleading 401).
+                .dispatcherTypeMatchers(DispatcherType.ERROR, DispatcherType.FORWARD).permitAll()
                 .requestMatchers(PUBLIC_URLS).permitAll()
                 // Admin endpoints — ADMIN only
                 .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
