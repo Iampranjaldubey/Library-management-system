@@ -13,14 +13,20 @@ import com.library.repository.BookRepository;
 import com.library.repository.TransactionRepository;
 import com.library.repository.UserRepository;
 import com.library.service.TransactionService;
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.concurrent.ThreadLocalRandom;
 
 @Service
 @RequiredArgsConstructor
@@ -30,14 +36,88 @@ public class TransactionServiceImpl implements TransactionService {
     private static final int    LOAN_PERIOD_DAYS = 7;
     private static final double FINE_PER_DAY_RS   = 5.0;
 
+    /** How many times a single issue request will retry after an optimistic-lock clash. */
+    private static final int    MAX_ISSUE_ATTEMPTS = 5;
+
     private final TransactionRepository transactionRepository;
     private final BookRepository        bookRepository;
     private final UserRepository        userRepository;
+    private final PlatformTransactionManager transactionManager;
+
+    /**
+     * Runs each issue attempt in its OWN transaction (REQUIRES_NEW). This is
+     * essential for the retry loop: with open-session-in-view enabled, a plain
+     * REQUIRED transaction would reuse the request-bound persistence context, so
+     * a retry's {@code findById} would return the stale, first-level-cached Book
+     * (same version) and spin forever. A brand-new transaction gets a fresh
+     * persistence context and re-reads the current row from the database.
+     */
+    private TransactionTemplate issueInNewTx;
+
+    @PostConstruct
+    void initTxTemplate() {
+        this.issueInNewTx = new TransactionTemplate(transactionManager);
+        this.issueInNewTx.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+    }
 
     // ── Issue ─────────────────────────────────────────────────────────────────
+
+    /**
+     * Issues a copy of a book to a user, safely under concurrency.
+     *
+     * <p><b>The race being defended against:</b> the naive flow reads the book,
+     * checks {@code availableCopies > 0}, decrements, and writes. Two requests
+     * for the last copy can both read {@code 1}, both pass the check, and both
+     * write a loan — issuing a book that does not physically exist.
+     *
+     * <p><b>Chosen fix — optimistic locking + retry.</b> {@link Book} carries a
+     * {@code @Version} column, so Hibernate emits {@code UPDATE ... WHERE id = ?
+     * AND version = ?}. The first committer wins; the loser matches zero rows and
+     * Hibernate throws an optimistic-lock exception. We then retry in a fresh
+     * transaction (see {@link #issueInNewTx}), where the re-read now sees the
+     * decremented count and correctly rejects with "no copies available".
+     *
+     * <p><b>Alternatives considered and rejected:</b>
+     * <ul>
+     *   <li><i>Pessimistic write lock</i> ({@code SELECT ... FOR UPDATE} via
+     *       {@code @Lock(PESSIMISTIC_WRITE)}): correct, but every issue serializes
+     *       on a row lock held for the whole transaction and it risks deadlocks
+     *       under load. Contention on a single title is low here, so paying that
+     *       cost on every request is the wrong trade. It becomes the better choice
+     *       if issue conflicts become frequent (hot titles).</li>
+     *   <li><i>Atomic conditional update</i> ({@code UPDATE books SET
+     *       available_copies = available_copies - 1 WHERE id = ? AND
+     *       available_copies > 0}, acting on the affected-row count): the most
+     *       efficient single-statement option, but it sidesteps the entity model
+     *       and would still need bespoke handling to build the loan row. Kept as
+     *       the go-to optimization if this ever becomes a throughput hot path.</li>
+     * </ul>
+     */
     @Override
-    @Transactional
     public TransactionResponse issueBook(IssueRequest request) {
+        int attempt = 0;
+        while (true) {
+            attempt++;
+            try {
+                return issueInNewTx.execute(status -> doIssueBook(request));
+            } catch (OptimisticLockingFailureException ex) {
+                if (attempt >= MAX_ISSUE_ATTEMPTS) {
+                    log.warn("Giving up issuing book {} after {} optimistic-lock retries",
+                            request.getBookId(), attempt);
+                    throw ex; // -> GlobalExceptionHandler maps to 409 Conflict
+                }
+                log.debug("Optimistic-lock conflict issuing book {} (attempt {}/{}); retrying",
+                        request.getBookId(), attempt, MAX_ISSUE_ATTEMPTS);
+                backoffBeforeRetry(attempt);
+            }
+        }
+    }
+
+    /**
+     * The actual issue unit of work. Runs inside {@link #issueInNewTx}, so the
+     * book decrement and the loan insert commit (or roll back) atomically.
+     */
+    private TransactionResponse doIssueBook(IssueRequest request) {
         Book book = bookRepository.findById(request.getBookId())
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Book not found with id: " + request.getBookId()));
@@ -54,7 +134,9 @@ public class TransactionServiceImpl implements TransactionService {
         LocalDate today   = LocalDate.now();
         LocalDate dueDate = today.plusDays(LOAN_PERIOD_DAYS);
 
-        // Decrement available copies
+        // Decrement available copies. On flush, Hibernate guards this with the
+        // version check; a concurrent issue that already committed makes this
+        // fail with an optimistic-lock exception rather than over-issuing.
         book.setAvailableCopies(book.getAvailableCopies() - 1);
         bookRepository.save(book);
 
@@ -69,6 +151,17 @@ public class TransactionServiceImpl implements TransactionService {
         log.info("Book '{}' issued to user '{}'. Due: {} (copies remaining: {})",
                 book.getTitle(), user.getEmail(), dueDate, book.getAvailableCopies());
         return toResponse(saved);
+    }
+
+    /** Small jittered pause so retrying threads don't stampede the same row in lockstep. */
+    private void backoffBeforeRetry(int attempt) {
+        try {
+            long jitterMs = ThreadLocalRandom.current().nextLong(5L, 15L * attempt);
+            Thread.sleep(jitterMs);
+        } catch (InterruptedException ie) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("Interrupted while retrying book issue", ie);
+        }
     }
 
     // ── Return ────────────────────────────────────────────────────────────────

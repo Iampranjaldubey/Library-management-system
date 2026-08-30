@@ -35,7 +35,9 @@ Commits on `resume-prep` (newest last):
 - build: disable email verification in local docker stack
 - build: map MySQL to host port 3307 to avoid local 3306 conflict
 - build: add restart policy to compose services
-- fix(security): return 403 instead of 401 for authenticated-but-unauthorized requests  <- HEAD (6b13cfa)
+- fix(security): return 403 instead of 401 for authenticated-but-unauthorized requests
+- docs: add session handoff for continuing in a new chat
+- fix(circulation): prevent book over-issue via optimistic locking + regression test  <- HEAD
 
 ---
 
@@ -66,11 +68,20 @@ Commits on `resume-prep` (newest last):
 - Docker: multi-stage backend/Dockerfile + root docker-compose.yml (MySQL 8 + backend, healthcheck, auto-restart). MySQL host port 3307. Email verification off for local stack.
 - Fixed test config: application-test.properties used jwt.* but app reads app.jwt.*.
 
-### Security fix — DONE (HEAD)
+### Security fix — DONE
 - 401->403 bug: authenticated USER on role-protected endpoint got 401 (frontend treats as session-expiry -> logout) instead of 403.
 - Root cause: default AccessDeniedHandler sendError(403) -> servlet ERROR dispatch to /error -> SS6 re-checks as anonymous -> /error not permitted -> 401.
 - Fix: JwtAccessDeniedHandler writes 403 ApiResponse JSON directly; SecurityConfig wires it and permits DispatcherType.ERROR/FORWARD.
-- Verified via real-container test SecurityAuthorizationTest (RANDOM_PORT). MockMvc could NOT reproduce. Full suite: 5 tests pass.
+- Verified via real-container test SecurityAuthorizationTest (RANDOM_PORT). MockMvc could NOT reproduce.
+
+### Milestone 1 — DONE (concurrency signature) (HEAD)
+- Reproduced the over-issue race with a 12-thread test (`TransactionConcurrencyTest`): on the OLD code 10/12 concurrent issues of a 1-copy book succeeded (assert exactly-1 failed with "but was: 10").
+- Fix = optimistic locking: `@Version Long version` on `Book` + Flyway `V5__add_book_version_optimistic_lock.sql` (`version BIGINT NOT NULL DEFAULT 0`). Hibernate now emits `UPDATE ... WHERE id=? AND version=?`; the losing writer matches 0 rows and fails instead of over-issuing.
+- `issueBook` no longer `@Transactional`; it retries up to `MAX_ISSUE_ATTEMPTS=5` via a `TransactionTemplate` with `PROPAGATION_REQUIRES_NEW` (fresh persistence context per attempt — otherwise OSIV's L1 cache hands back the stale entity and retry spins), with jittered backoff. The atomic decrement + loan insert stay one unit of work.
+- Exhausted retries -> `OptimisticLockingFailureException` -> new `GlobalExceptionHandler` mapping to **409**.
+- Rejected alternatives documented in `issueBook` javadoc: pessimistic `SELECT ... FOR UPDATE` (`@Lock(PESSIMISTIC_WRITE)`) and atomic conditional `UPDATE books SET available_copies = available_copies - 1 WHERE id=? AND available_copies > 0`.
+- Green on the fix; full suite **6 tests pass** on JDK 17.
+- CAVEAT: the test runs on H2 (Docker is blocked for the agent). `@Version` is enforced at the Hibernate layer so H2 exercises it faithfully, but this does NOT test the V5 migration itself or MySQL row-lock behavior. Confirm V5 + `ddl-auto=validate` boot cleanly on real MySQL via `docker compose up --build`. M2 ports the test to Testcontainers MySQL for the definitive proof.
 
 ---
 
@@ -87,18 +98,19 @@ Commits on `resume-prep` (newest last):
 
 ---
 
-## 6. Next — Milestone 1 (signature interview story)
+## 6. Next — Milestone 2 (testing + CI)
 
-**Concurrency race in TransactionServiceImpl.issueBook():** read -> check availableCopies>0 -> decrement -> save with no locking. Two concurrent issues of the last copy both pass -> over-issue.
+M1 (concurrency) is done (see section 4). Next is proving rigor with a number and a green badge.
 
 Plan:
-1. Failing multi-threaded test (ExecutorService + CountDownLatch): N concurrent issues on a 1-copy book; assert exactly 1 succeeds. Prefer verifying against real MySQL (Testcontainers), since H2 locking differs.
-2. Fix with optimistic locking: @Version on Book, catch OptimisticLockException, bounded retry.
-3. Document rejected alternatives: pessimistic lock (@Lock PESSIMISTIC_WRITE / SELECT ... FOR UPDATE) and atomic conditional UPDATE ... WHERE available_copies > 0.
-4. Keep the test as a regression guard.
-Caveat: @Version adds a `version` column -> new Flyway V5 migration; Hibernate validate must still pass.
+1. Testcontainers MySQL with Flyway ENABLED for integration tests (tests the real schema + migrations, unlike the current H2 profile). First target: port `TransactionConcurrencyTest` to MySQL and add a test asserting `ddl-auto=validate` passes on a fresh migrated DB (this is what proves V5 + `@Version` are correct on MySQL — the H2 run can't).
+2. Unit tests for `TransactionServiceImpl` fine logic: on-time (null fine), 1 day late, many days late, boundary at due date.
+3. JaCoCo coverage report + CI gate (aim for a real 80%+).
+4. GitHub Actions CI: build + test backend (pin JDK 17 — system JDK is 24 and Lombok 1.18.36 breaks on it), lint/type-check/test frontend, build Docker image. Add CI + coverage badges to README.
 
-After M1: M2 = Testcontainers + JaCoCo + GitHub Actions CI (pin JDK 17). M3 = auth lifecycle hardening (HttpOnly refresh cookie) + perf numbers + ONE feature (CSV import / PDF receipts via OpenPDF / realtime SSE). M4 = README + resume bullets + GitHub polish.
+NOTE for Testcontainers: Docker is blocked for the agent, so the USER runs the Testcontainers suite locally / in CI. Keep the H2 profile for the agent-runnable fast path.
+
+After M2: M3 = auth lifecycle hardening (HttpOnly refresh cookie, rotation + reuse detection) + perf numbers + ONE feature (CSV import / PDF receipts via OpenPDF / realtime SSE). M4 = README + resume bullets + GitHub polish.
 
 ---
 
