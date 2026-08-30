@@ -29,7 +29,7 @@ is XSS-readable and the cookie isn't; the same-origin proxy that keeps the cooki
 first-party; the 401-vs-403 fix for authenticated-but-unauthorized requests.
 
 ### Testing & CI
-> Reached ~49% backend coverage (JaCoCo-gated) with JUnit 5 + Mockito and
+> Reached ~66% backend coverage (JaCoCo-gated in CI) with JUnit 5 + Mockito and
 > Testcontainers integration tests that run real Flyway migrations against MySQL
 > under `ddl-auto=validate`; wired GitHub Actions to build/test backend + frontend
 > and build the Docker image on every push.

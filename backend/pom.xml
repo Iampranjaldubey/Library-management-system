@@ -226,8 +226,9 @@
                                         <limit>
                                             <counter>INSTRUCTION</counter>
                                             <value>COVEREDRATIO</value>
-                                            <!-- Raised as coverage grows; see README testing section. -->
-                                            <minimum>0.30</minimum>
+                                            <!-- Ratchet: keep just below the current ~66% so the gate
+                                                 holds the line and only moves up as coverage grows. -->
+                                            <minimum>0.60</minimum>
                                         </limit>
                                     </limits>
                                 </rule>

@@ -5,7 +5,7 @@ one-command Docker stack. Spring Boot 3 + MySQL on the back, Next.js 16 +
 TypeScript on the front.
 
 [![CI](https://github.com/Iampranjaldubey/Library-management-system/actions/workflows/ci.yml/badge.svg)](https://github.com/Iampranjaldubey/Library-management-system/actions/workflows/ci.yml)
-![Coverage](https://img.shields.io/badge/backend%20coverage-~49%25-yellowgreen)
+![Coverage](https://img.shields.io/badge/backend%20coverage-~66%25-brightgreen)
 ![Java](https://img.shields.io/badge/Java-17-orange)
 ![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.2-6DB33F)
 ![Next.js](https://img.shields.io/badge/Next.js-16-black)
@@ -157,10 +157,10 @@ cd backend && ./mvnw verify        # Testcontainers MySQL tests need Docker
 cd frontend && pnpm test:run
 ```
 
-Backend instruction coverage is ~49% and gated in CI; the meaningful coverage is
-the concurrency race, the auth/rotation/reuse flow, migration-vs-entity validation
-on real MySQL, and the fine calculation. Load/Lighthouse harness lives in
-[`perf/`](perf/README.md).
+Backend instruction coverage is ~66%, gated in CI (JaCoCo, `mvnw verify`). Beyond the
+raw number, the meaningful coverage is the concurrency race, the auth/rotation/reuse
+flow, migration-vs-entity validation on real MySQL, the service layer (books, users,
+fines), and PDF generation. Load/Lighthouse harness lives in [`perf/`](perf/README.md).
 
 ---
 
