@@ -12,7 +12,7 @@ export interface NavItem {
 export const navigation: NavItem[] = [
   { name: "Dashboard",    href: "/dashboard",              icon: LayoutDashboard },
   { name: "Books",        href: "/dashboard/books",        icon: BookOpen },
-  { name: "Members",      href: "/dashboard/members",      icon: Users,          allowedRoles: ["ADMIN", "LIBRARIAN"] },
+  { name: "Members",      href: "/dashboard/members",      icon: Users,          allowedRoles: ["ADMIN"] },
   { name: "Issue Book",   href: "/dashboard/issue",        icon: BookPlus,       allowedRoles: ["ADMIN", "LIBRARIAN"] },
   { name: "Return Book",  href: "/dashboard/return",       icon: RotateCcw,      allowedRoles: ["ADMIN", "LIBRARIAN"] },
   { name: "Transactions", href: "/dashboard/transactions", icon: ArrowLeftRight, allowedRoles: ["ADMIN", "LIBRARIAN"] },
