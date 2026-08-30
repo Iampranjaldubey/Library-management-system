@@ -37,7 +37,15 @@ Commits on `resume-prep` (newest last):
 - build: add restart policy to compose services
 - fix(security): return 403 instead of 401 for authenticated-but-unauthorized requests
 - docs: add session handoff for continuing in a new chat
-- fix(circulation): prevent book over-issue via optimistic locking + regression test  <- HEAD
+- fix(circulation): prevent book over-issue via optimistic locking + regression test
+- test(backend): add fine-logic unit tests, Testcontainers MySQL ITs, and JaCoCo gate
+- test(frontend): add Vitest + React Testing Library with hook/context/util tests
+- ci: add GitHub Actions pipeline (backend verify, frontend build/test, docker image)
+- feat(auth): HttpOnly refresh-token cookie with rotation and reuse detection
+- feat(frontend): cookie-based auth via same-origin proxy + graceful session expiry
+- feat(receipts): downloadable PDF transaction receipts via OpenPDF
+- perf: add k6 catalog load test and Lighthouse harness (no fabricated numbers)
+- docs: rewrite README (highlights, one-command run, badges) and add resume bullets  <- HEAD
 
 ---
 
@@ -74,14 +82,37 @@ Commits on `resume-prep` (newest last):
 - Fix: JwtAccessDeniedHandler writes 403 ApiResponse JSON directly; SecurityConfig wires it and permits DispatcherType.ERROR/FORWARD.
 - Verified via real-container test SecurityAuthorizationTest (RANDOM_PORT). MockMvc could NOT reproduce.
 
-### Milestone 1 — DONE (concurrency signature) (HEAD)
+### Milestone 1 — DONE (concurrency signature)
 - Reproduced the over-issue race with a 12-thread test (`TransactionConcurrencyTest`): on the OLD code 10/12 concurrent issues of a 1-copy book succeeded (assert exactly-1 failed with "but was: 10").
 - Fix = optimistic locking: `@Version Long version` on `Book` + Flyway `V5__add_book_version_optimistic_lock.sql` (`version BIGINT NOT NULL DEFAULT 0`). Hibernate now emits `UPDATE ... WHERE id=? AND version=?`; the losing writer matches 0 rows and fails instead of over-issuing.
 - `issueBook` no longer `@Transactional`; it retries up to `MAX_ISSUE_ATTEMPTS=5` via a `TransactionTemplate` with `PROPAGATION_REQUIRES_NEW` (fresh persistence context per attempt — otherwise OSIV's L1 cache hands back the stale entity and retry spins), with jittered backoff. The atomic decrement + loan insert stay one unit of work.
 - Exhausted retries -> `OptimisticLockingFailureException` -> new `GlobalExceptionHandler` mapping to **409**.
 - Rejected alternatives documented in `issueBook` javadoc: pessimistic `SELECT ... FOR UPDATE` (`@Lock(PESSIMISTIC_WRITE)`) and atomic conditional `UPDATE books SET available_copies = available_copies - 1 WHERE id=? AND available_copies > 0`.
 - Green on the fix; full suite **6 tests pass** on JDK 17.
-- CAVEAT: the test runs on H2 (Docker is blocked for the agent). `@Version` is enforced at the Hibernate layer so H2 exercises it faithfully, but this does NOT test the V5 migration itself or MySQL row-lock behavior. Confirm V5 + `ddl-auto=validate` boot cleanly on real MySQL via `docker compose up --build`. M2 ports the test to Testcontainers MySQL for the definitive proof.
+- The test runs on H2 (Docker is blocked for the agent). `@Version` is enforced at the Hibernate layer so H2 exercises the locking faithfully, but the H2 run does NOT test the V5 migration itself or MySQL row-lock behavior.
+- CONFIRMED ON MYSQL (2026-08-30): user ran `docker compose up --build`; backend booted clean (verified over HTTP — `/api-docs` & `/swagger-ui.html` 200, `/api/v1/transactions` 401). Because the app runs Flyway + `ddl-auto=validate`, a clean boot proves V5 applied and the `books.version` column matches the `@Version` mapping on real MySQL.
+
+### Milestone 2 — DONE (testing + CI)
+- JaCoCo report + gate (0.30 BUNDLE instruction; **actual ~49%**) via `mvnw verify`. Excludes dto/entity/config/app.
+- `TransactionServiceFineTest` — 5 pure-Mockito fine cases (before due=null, on-due boundary=null, 1 day=₹5, 10 days=₹50, double-return rejected).
+- `integration/SchemaMigrationValidationMySQLTest` + `integration/TransactionConcurrencyMySQLTest` — Testcontainers MySQL 8, Flyway ON, `ddl-auto=validate`, `@Testcontainers(disabledWithoutDocker=true)` so they SKIP locally (no Docker for agent) and RUN in CI. New `application-mysqltest.properties`.
+- Frontend: Vitest + React Testing Library (`vitest.config.ts`, `vitest.setup.ts`, `__tests__/` for dedupeBooks, useBooks, AuthProvider) — 8 tests. Scripts: `pnpm test:run`, `test:coverage`.
+- `.github/workflows/ci.yml`: backend `mvnw verify` on Temurin 17 (Testcontainers run here), frontend type-check+Vitest+build on node22/pnpm10, docker image build.
+- pom: added spring-boot-testcontainers, testcontainers junit-jupiter+mysql, httpclient5 (all test), jacoco 0.8.11.
+
+### Milestone 3 — DONE (full-stack depth)
+- **3a auth hardening (backend):** refresh token now ONLY in an HttpOnly cookie (`RefreshTokenCookieFactory`, secure/sameSite/path via `app.auth.refresh-cookie.*`; test profile secure=false/Lax, prod None/Secure). `/refresh` reads `@CookieValue` and ROTATES (old revoked, new issued); replay of a rotated token = reuse → `revokeAllByUser` → 401. New `/logout` revokes + clears cookie. `RefreshToken` → `@ManyToOne` (retain revoked lineage). `RefreshTokenServiceImpl.rotate` is `@Transactional(noRollbackFor=TokenRefreshException.class)` (else revocation rolls back). `AuthResponse` `@JsonInclude(NON_NULL)`. `AuthRefreshTokenFlowTest` (RANDOM_PORT, 4 tests, needs httpclient5 for POST-401).
+- **3a auth (frontend):** same-origin **BFF proxy** — `next.config.mjs` rewrites `/api/:path*` → `${BACKEND_API_URL||NEXT_PUBLIC_API_URL||localhost:8080}`; `config.apiUrl=""`, `lib/auth.ts BASE_URL=""`; all fetch `credentials:"include"`; silent refresh POSTs `/auth/refresh` (cookie, no body) storing only the new access token; `logout()` calls backend; login shows `?expired=1` notice.
+- **3c signature feature:** PDF receipts — `ReceiptService`+`Impl` (OpenPDF), `GET /api/v1/transactions/{id}/receipt` (ADMIN/LIBRARIAN, application/pdf), `getTransaction(id)`; frontend `downloadTransactionReceipt` blob + button in transaction detail modal. `ReceiptServiceImplTest`.
+- **3b performance:** `perf/k6-catalog.js` (k6 login+catalog load test, p95/error thresholds) + `perf/README.md` (Lighthouse steps, empty result tables). NO fabricated numbers.
+
+### Milestone 4 — DONE (presentation)
+- README rewritten: badges (CI, coverage ~49%, Java 17, Spring Boot 3.2, Next 16), Engineering Highlights with links to actual files, one-command `docker compose up --build`, corrected stack (Next 16), updated endpoints/architecture (same-origin proxy), testing section.
+- `RESUME_BULLETS.md`: defensible bullets + per-bullet interview talking points; blanks flagged for metrics needing measurement.
+
+### Verified this session (JDK 17)
+- Backend `mvnw verify`: **19 tests, 0 failures, 2 skipped** (Testcontainers MySQL skip without Docker), coverage gate met, BUILD SUCCESS.
+- Frontend: `pnpm type-check` clean, `pnpm build` (13 routes), `pnpm test:run` **8 pass**.
 
 ---
 
@@ -98,35 +129,36 @@ Commits on `resume-prep` (newest last):
 
 ---
 
-## 6. Next — Milestone 2 (testing + CI)
+## 6. Next — user verification & remaining polish
 
-M1 (concurrency) is done (see section 4). Next is proving rigor with a number and a green badge.
+All five milestones (M0–M4) are IMPLEMENTED and committed on `resume-prep` (nothing pushed). What the agent could not do itself — do these to finish:
 
-Plan:
-1. Testcontainers MySQL with Flyway ENABLED for integration tests (tests the real schema + migrations, unlike the current H2 profile). First target: port `TransactionConcurrencyTest` to MySQL and add a test asserting `ddl-auto=validate` passes on a fresh migrated DB (this is what proves V5 + `@Version` are correct on MySQL — the H2 run can't).
-2. Unit tests for `TransactionServiceImpl` fine logic: on-time (null fine), 1 day late, many days late, boundary at due date.
-3. JaCoCo coverage report + CI gate (aim for a real 80%+).
-4. GitHub Actions CI: build + test backend (pin JDK 17 — system JDK is 24 and Lombok 1.18.36 breaks on it), lint/type-check/test frontend, build Docker image. Add CI + coverage badges to README.
+1. **Run the Testcontainers suite** (needs Docker): `cd backend ; .\mvnw.cmd verify`. Confirms the MySQL migration-validate + concurrency-on-MySQL tests pass (they SKIP without Docker locally, RUN in CI).
+2. **Browser E2E of cookie auth** (agent has no browser): `docker compose up --build`, then `cd frontend ; pnpm dev`. Log in → confirm an HttpOnly `refresh_token` cookie is set (DevTools → Application → Cookies), let the 15-min access token lapse → confirm silent refresh rotates the cookie and requests keep working; log out → confirm the cookie is cleared. Local dev works because the browser talks same-origin (Next proxy).
+3. **Push + watch CI**: push `resume-prep` and confirm the GitHub Actions run is green (badge in README resolves once on the default branch). Optionally open a PR into `main`.
+4. **Capture real perf numbers** (`perf/README.md`): run `k6 run perf/k6-catalog.js` and Lighthouse, fill the tables, then fill the blanks in `RESUME_BULLETS.md`.
+5. **Prod cookie env** (only if NOT using the same-origin proxy on Vercel): the refresh cookie defaults to `SameSite=None; Secure` — set `REFRESH_COOKIE_SECURE`/`REFRESH_COOKIE_SAMESITE` on the API and `BACKEND_API_URL` on the frontend as needed. Same-origin proxy (default) is the recommended path.
 
-NOTE for Testcontainers: Docker is blocked for the agent, so the USER runs the Testcontainers suite locally / in CI. Keep the H2 profile for the agent-runnable fast path.
-
-After M2: M3 = auth lifecycle hardening (HttpOnly refresh cookie, rotation + reuse detection) + perf numbers + ONE feature (CSV import / PDF receipts via OpenPDF / realtime SSE). M4 = README + resume bullets + GitHub polish.
+Optional future depth (not required): raise the JaCoCo gate as coverage grows, add refresh-token cleanup scheduling, more frontend component tests.
 
 ---
 
 ## 7. Key files
 
-- RESUME_PROJECT_PLAN.md — active plan (milestones, bullets, interview Q&A)
-- ROADMAP.md — long-term product vision (not current focus)
-- SESSION_HANDOFF.md — this file
-- backend/.../service/impl/TransactionServiceImpl.java — M1 target
-- backend/.../config/SecurityConfig.java — security + 401/403 fix
-- backend/.../security/JwtAccessDeniedHandler.java — new 403 handler
-- backend/.../controller/SecurityAuthorizationTest.java — real-container test pattern to reuse for M1
-- docker-compose.yml / backend/Dockerfile — local stack
+- RESUME_PROJECT_PLAN.md — original plan; RESUME_BULLETS.md — resume bullets + interview talking points
+- ROADMAP.md — long-term product vision (not current focus); SESSION_HANDOFF.md — this file
+- backend/.../service/impl/TransactionServiceImpl.java — concurrency-safe issueBook (optimistic lock + retry)
+- backend/.../service/impl/RefreshTokenServiceImpl.java — rotation + reuse detection; security/RefreshTokenCookieFactory.java — HttpOnly cookie
+- backend/.../controller/AuthController.java — login/register/refresh/logout cookie wiring
+- backend/.../service/impl/ReceiptServiceImpl.java — OpenPDF receipts; TransactionController receipt endpoint
+- backend/.../integration/*MySQLTest.java — Testcontainers ITs; test/.../AuthRefreshTokenFlowTest.java — cookie/rotation/reuse
+- frontend/next.config.mjs (same-origin proxy), lib/api.ts + lib/auth.ts + context/auth-context.tsx — cookie auth flow
+- .github/workflows/ci.yml — CI; perf/ — k6 + Lighthouse harness; docker-compose.yml / backend/Dockerfile — local stack
 
 ---
 
 ## 8. Resume in a new chat
 
-Say: "Continue the LibraryOS resume project on branch resume-prep. Read SESSION_HANDOFF.md and RESUME_PROJECT_PLAN.md, then proceed with Milestone 1 (the concurrency race in issueBook). Build with JDK 17 at ~/maven-tmp/jdk-17.0.20.1+1; I will run docker commands myself since they are blocked for you."
+All five milestones (M0–M4) are implemented on `resume-prep` (not pushed). See section 6 for the remaining USER verification steps (run Testcontainers via `mvnw verify`, browser-test the cookie auth flow, push + watch CI, capture k6/Lighthouse numbers).
+
+Say: "Continue the LibraryOS resume project on branch resume-prep. Read SESSION_HANDOFF.md; M0–M4 are implemented. Build with JDK 17 at ~/maven-tmp/jdk-17.0.20.1+1; I run docker commands myself." — then point to whichever section-6 item (or new work) you want next.
