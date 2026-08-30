@@ -502,6 +502,9 @@ export interface UserDto {
 }
 
 export const usersApi = {
+  /** The signed-in user's own profile (any role). */
+  getProfile: () => apiFetch<UserDto>("/api/v1/users/profile"),
+
   getAll: (q?: string, page = 0, size = 20) => {
     const params = new URLSearchParams()
     if (q) params.set("q", q)
