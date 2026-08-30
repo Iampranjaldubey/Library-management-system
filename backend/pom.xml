@@ -97,6 +97,14 @@
             <scope>test</scope>
         </dependency>
 
+        <!-- Apache HttpClient 5 so TestRestTemplate handles POST responses that
+             return 401/403 (the JDK's HttpURLConnection throws HttpRetryException). -->
+        <dependency>
+            <groupId>org.apache.httpcomponents.client5</groupId>
+            <artifactId>httpclient5</artifactId>
+            <scope>test</scope>
+        </dependency>
+
         <!-- Testcontainers — integration tests against real MySQL with Flyway enabled.
              Versions are managed by the Spring Boot parent's dependency management. -->
         <dependency>

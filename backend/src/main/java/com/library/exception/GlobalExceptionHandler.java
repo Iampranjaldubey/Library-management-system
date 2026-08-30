@@ -74,6 +74,15 @@ public class GlobalExceptionHandler {
                 .body(ApiResponse.error("Invalid email or password"));
     }
 
+    // ── 401 — refresh token missing / invalid / expired / reused ───────────────
+    @ExceptionHandler(TokenRefreshException.class)
+    public ResponseEntity<ApiResponse<Void>> handleTokenRefresh(TokenRefreshException ex) {
+        log.warn("Refresh token rejected: {}", ex.getMessage());
+        return ResponseEntity
+                .status(HttpStatus.UNAUTHORIZED)
+                .body(ApiResponse.error(ex.getMessage()));
+    }
+
     // ── 409 — optimistic-lock clash that survived all retries ──────────────────
     @ExceptionHandler(OptimisticLockingFailureException.class)
     public ResponseEntity<ApiResponse<Void>> handleOptimisticLock(OptimisticLockingFailureException ex) {

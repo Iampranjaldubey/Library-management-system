@@ -21,8 +21,14 @@ public class RefreshToken {
     @Column(nullable = false, unique = true)
     private String token;
 
-    @OneToOne
-    @JoinColumn(name = "user_id", referencedColumnName = "id")
+    /**
+     * Many tokens per user (was @OneToOne). Rotation issues a fresh row on every
+     * refresh and marks the old one revoked rather than deleting it, so a stolen,
+     * already-rotated token can be recognized on reuse. Retaining that lineage is
+     * only possible with a to-many relationship.
+     */
+    @ManyToOne(optional = false)
+    @JoinColumn(name = "user_id", referencedColumnName = "id", nullable = false)
     private User user;
 
     @Column(nullable = false)
