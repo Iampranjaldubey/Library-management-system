@@ -9,7 +9,7 @@ import React, {
   useMemo,
 } from "react"
 import { useRouter } from "next/navigation"
-import type { AuthUser, Role } from "@/lib/auth"
+import { authService, type AuthUser, type Role } from "@/lib/auth"
 import { getStorageKey } from "@/lib/config"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -76,9 +76,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   const logout = useCallback(() => {
+    // Best-effort server-side revoke + HttpOnly refresh-cookie clear. Fire-and-forget:
+    // JS can't clear the HttpOnly cookie itself, and local state is cleared regardless.
+    void authService.logout().catch(() => {})
     localStorage.removeItem(getStorageKey("TOKEN"))
     localStorage.removeItem(getStorageKey("USER"))
-    // Expire the middleware cookie
+    // Expire the (non-HttpOnly) middleware cookie used for route gating
     document.cookie = "auth-token=; path=/; max-age=0"
     setUser(null)
     router.push("/login")

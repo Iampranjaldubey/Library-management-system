@@ -45,6 +45,17 @@ export default function LoginPage() {
     }
   }, [isAuthenticated, authLoading, router])
 
+  // Graceful session-expiry notice: the API layer redirects here with ?expired=1
+  // when a silent refresh fails. Read it from the URL directly to avoid the
+  // useSearchParams Suspense requirement (keeps this page statically rendered).
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    if (new URLSearchParams(window.location.search).get("expired") === "1") {
+      setServerError("Your session expired. Please sign in again.")
+      toast.info("Session expired", { description: "Please sign in again to continue." })
+    }
+  }, [])
+
   const {
     register,
     handleSubmit,

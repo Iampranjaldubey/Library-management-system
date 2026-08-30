@@ -6,6 +6,16 @@ import type { ReactNode } from "react"
 const push = vi.fn()
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push }) }))
 
+// logout() calls the backend to clear the HttpOnly cookie; stub it so the test
+// doesn't hit the network (jsdom has no fetch).
+vi.mock("@/lib/auth", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/auth")>()
+  return {
+    ...actual,
+    authService: { ...actual.authService, logout: vi.fn().mockResolvedValue(undefined) },
+  }
+})
+
 import { AuthProvider, useAuth } from "@/context/auth-context"
 import type { AuthUser } from "@/lib/auth"
 

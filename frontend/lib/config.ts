@@ -11,8 +11,12 @@ import type { EnvironmentConfig } from "@/types"
  * Application Configuration Object
  */
 export const config: EnvironmentConfig = {
-  // API Configuration
-  apiUrl: process.env.NEXT_PUBLIC_API_URL || "https://library-management-system-production-1e10.up.railway.app",
+  // API base is same-origin (empty string) on purpose: every request goes to
+  // this Next app at /api/* and next.config rewrites proxy it to the backend.
+  // Keeping traffic first-party is what makes the HttpOnly refresh-token cookie
+  // work with SameSite=Lax. The upstream backend URL is configured server-side
+  // via BACKEND_API_URL / NEXT_PUBLIC_API_URL in next.config, NOT here.
+  apiUrl: "",
   
   // Application Metadata
   appName: process.env.NEXT_PUBLIC_APP_NAME || "Library Management System",

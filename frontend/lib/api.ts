@@ -155,7 +155,9 @@ export async function apiFetch<T = unknown>(
   const fetchPromise = (async () => {
     let response: Response
     try {
-      response = await fetch(url, { ...options, headers })
+      // credentials:"include" so the HttpOnly refresh cookie rides along on
+      // same-origin calls (needed for the silent-refresh flow below).
+      response = await fetch(url, { ...options, credentials: "include", headers })
     } catch (networkErr: unknown) {
       const msg = networkErr instanceof Error ? networkErr.message : "Network error"
       if (config.isDevelopment) {
@@ -198,60 +200,61 @@ export async function apiFetch<T = unknown>(
         )
       }
 
-      // 401 — token expired or invalid: attempt silent refresh
+      // 401 — access token expired/invalid: attempt a silent, cookie-based refresh.
       if (response.status === 401) {
-        // Try to refresh token
-        let userStr = typeof window !== "undefined" ? localStorage.getItem(getStorageKey("USER")) : null
-        
-        if (userStr) {
+        const hadToken =
+          typeof window !== "undefined" && !!localStorage.getItem(getStorageKey("TOKEN"))
+        const isAuthCall =
+          endpoint.includes("/auth/refresh") || endpoint.includes("/auth/login")
+
+        if (hadToken && !isAuthCall) {
           try {
-             const user = JSON.parse(userStr)
-             if (user.refreshToken && !endpoint.includes("/refresh")) {
-                if (config.isDevelopment) {
-                   console.log(`[API] Attempting silent token refresh`)
+            if (config.isDevelopment) console.log("[API] Attempting silent token refresh")
+
+            // The refresh token is in the HttpOnly cookie — send credentials, no body.
+            // Raw fetch (not apiFetch) so a 401 here can't recurse.
+            const refreshRes = await fetch(`${config.apiUrl}/api/v1/auth/refresh`, {
+              method: "POST",
+              credentials: "include",
+            })
+
+            if (refreshRes.ok) {
+              const refreshBody = await refreshRes.json()
+              const newToken: string | undefined = refreshBody?.data?.token
+              if (newToken) {
+                // Persist the new ACCESS token. The rotated refresh token is set
+                // by the server as a fresh HttpOnly cookie automatically.
+                localStorage.setItem(getStorageKey("TOKEN"), newToken)
+                const storedUser = localStorage.getItem(getStorageKey("USER"))
+                if (storedUser) {
+                  const merged = { ...JSON.parse(storedUser), ...refreshBody.data }
+                  localStorage.setItem(getStorageKey("USER"), JSON.stringify(merged))
                 }
-                
-                // Do the refresh call using native fetch to avoid recursive apiFetch loops
-                const refreshRes = await fetch(`${config.apiUrl}/api/v1/auth/refresh`, {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ refreshToken: user.refreshToken }),
+                document.cookie = `auth-token=${newToken}; path=/; SameSite=Lax; max-age=${60 * 60 * 24 * 7}`
+
+                // Retry the original request once with the new access token.
+                const retryRes = await fetch(url, {
+                  ...options,
+                  credentials: "include",
+                  headers: { ...headers, Authorization: `Bearer ${newToken}` },
                 })
-                
-                if (refreshRes.ok) {
-                   const refreshBody = await refreshRes.json()
-                   if (refreshBody?.data?.token) {
-                      // Update local storage
-                      const newUser = refreshBody.data
-                      localStorage.setItem(getStorageKey("TOKEN"), newUser.token)
-                      localStorage.setItem(getStorageKey("USER"), JSON.stringify(newUser))
-                      document.cookie = `auth-token=${newUser.token}; path=/; SameSite=Lax; max-age=${60 * 60 * 24 * 7}`
-                      
-                      // Retry the original request
-                      const retryHeaders = {
-                        ...headers,
-                        Authorization: `Bearer ${newUser.token}`
-                      }
-                      const retryRes = await fetch(url, { ...options, headers: retryHeaders })
-                      if (retryRes.ok) {
-                         const retryBody = await retryRes.json()
-                         return retryBody as ApiResponse<T>
-                      }
-                   }
+                if (retryRes.ok) {
+                  return (await retryRes.json()) as ApiResponse<T>
                 }
-             }
+              }
+            }
           } catch (e) {
-             console.error("[API] Failed to parse user or refresh token", e)
+            if (config.isDevelopment) console.error("[API] Silent refresh failed", e)
           }
         }
-        
-        // Refresh failed or no refresh token available: clear session and redirect
+
+        // Refresh unavailable or failed: clear the local session and bounce to login.
         if (typeof window !== "undefined") {
-          const hadToken = !!localStorage.getItem(getStorageKey("TOKEN"))
           clearSession()
           if (hadToken) {
-            // Hard redirect so the auth context re-initialises cleanly
-            window.location.href = "/login"
+            // Hard redirect so the auth context re-initialises cleanly; the flag
+            // lets the login page show a friendly "your session expired" notice.
+            window.location.href = "/login?expired=1"
           }
         }
         throw new ApiError("Session expired. Please sign in again.", 401, body)
