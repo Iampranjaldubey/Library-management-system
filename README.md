@@ -1,8 +1,14 @@
-# 📚 LibraryOS — Library Management System
+# 📚 LibraryOS — Full-Stack Library Platform
 
-A full-stack, production-deployed library management platform with JWT 
-authentication, role-based access control, book management, and 
-transaction tracking.
+Concurrency-safe book circulation with JWT auth, refresh-token rotation, and a
+one-command Docker stack. Spring Boot 3 + MySQL on the back, Next.js 16 +
+TypeScript on the front.
+
+[![CI](https://github.com/Iampranjaldubey/Library-management-system/actions/workflows/ci.yml/badge.svg)](https://github.com/Iampranjaldubey/Library-management-system/actions/workflows/ci.yml)
+![Coverage](https://img.shields.io/badge/backend%20coverage-~49%25-yellowgreen)
+![Java](https://img.shields.io/badge/Java-17-orange)
+![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.2-6DB33F)
+![Next.js](https://img.shields.io/badge/Next.js-16-black)
 
 ![Dashboard](screenshots/dashboard.png)
 
@@ -13,168 +19,148 @@ transaction tracking.
 - **Frontend**: https://library-management-system-46sl.vercel.app
 - **Backend API (Swagger)**: https://library-management-system-production-1e10.up.railway.app/swagger-ui/index.html
 
-> **Demo Credentials**
-> | Role | Email | Password |
-> |------|-------|----------|
-> | Admin | pranjal@gmail.com | 123456 |
+> **Live demo login** — Admin: `pranjal@gmail.com` / `123456`
+
+### Or run the whole stack in one command
+
+```bash
+docker compose up --build
+```
+
+That's MySQL 8 + the Spring Boot API (Flyway-migrated, healthchecked). Swagger at
+http://localhost:8080/swagger-ui.html. Then start the frontend with
+`cd frontend && pnpm install && pnpm dev` (http://localhost:3000).
+
+---
+
+## 🧩 Engineering Highlights
+
+The parts worth reading — each is small, tested, and defensible.
+
+### Concurrency-safe circulation (the headline)
+`issueBook` used to read → check availability → decrement → save with no locking,
+so two requests for the last copy could both succeed and over-issue a book. A
+[12-thread test](backend/src/test/java/com/library/service/TransactionConcurrencyTest.java)
+reproduces it (10/12 succeed on the old code). The fix is **JPA optimistic locking**:
+a `@Version` column on `Book` (Flyway
+[V5](backend/src/main/resources/db/migration/V5__add_book_version_optimistic_lock.sql))
+turns the update into `... WHERE id = ? AND version = ?`, and
+[`issueBook`](backend/src/main/java/com/library/service/impl/TransactionServiceImpl.java)
+retries the loser in a fresh `REQUIRES_NEW` transaction with bounded backoff.
+Rejected alternatives (pessimistic `SELECT ... FOR UPDATE`, atomic conditional
+`UPDATE`) are documented inline.
+
+### Refresh-token rotation with reuse detection
+The refresh token lives in an **HttpOnly, SameSite, Secure-configurable cookie**
+(never in the JSON body or `localStorage`, so XSS can't read it). Every `/refresh`
+[rotates](backend/src/main/java/com/library/service/impl/RefreshTokenServiceImpl.java)
+the token; replaying a rotated token is detected as **reuse** and revokes the
+user's entire token family. The Next.js app puts the API behind a **same-origin
+proxy** so the cookie is first-party. Full flow is
+[integration-tested](backend/src/test/java/com/library/controller/AuthRefreshTokenFlowTest.java).
+
+### Testing against real MySQL, in CI
+Integration tests run the actual Flyway migrations against a
+[Testcontainers MySQL](backend/src/test/java/com/library/integration/) instance
+with `ddl-auto=validate`, proving the schema and JPA entities agree — something the
+H2 unit profile can't. [GitHub Actions](.github/workflows/ci.yml) runs the backend
+(`mvnw verify`, JaCoCo gate), the frontend (type-check + Vitest + build), and a
+Docker image build on every push.
+
+### PDF receipts
+`GET /api/v1/transactions/{id}/receipt` streams a printable
+[OpenPDF receipt](backend/src/main/java/com/library/service/impl/ReceiptServiceImpl.java);
+the transactions UI downloads it as a blob.
 
 ---
 
 ## 📸 Screenshots
 
-### Login Page
-![Login](screenshots/login.png)
-
-### Dashboard
-![Dashboard](screenshots/dashboard.png)
-
-### Issue Book
-![Issue Book](screenshots/issue.png)
-
-### Return Book
-![Return Book](screenshots/return.png)
-
-### Transactions
-![Transactions](screenshots/transactions.png)
+| Login | Dashboard | Transactions |
+|-------|-----------|--------------|
+| ![Login](screenshots/login.png) | ![Dashboard](screenshots/dashboard.png) | ![Transactions](screenshots/transactions.png) |
 
 ---
 
 ## 🛠 Tech Stack
 
-### Backend
-| Technology | Purpose |
-|------------|---------|
-| Java 17 | Core language |
-| Spring Boot 3.2 | Backend framework |
-| Spring Security + JWT | Authentication & authorization |
-| MySQL + Spring Data JPA | Database & ORM |
-| Swagger (OpenAPI 3) | API documentation |
-| Maven | Build tool |
-| Railway | Deployment |
+**Backend** — Java 17, Spring Boot 3.2, Spring Security 6 + JWT, Spring Data JPA,
+MySQL 8, Flyway migrations, OpenPDF, springdoc/OpenAPI, Maven (wrapper).
 
-### Frontend
-| Technology | Purpose |
-|------------|---------|
-| Next.js 14 + TypeScript | Frontend framework |
-| Tailwind CSS + shadcn/ui | Styling & UI components |
-| React Context API | State management |
-| Native Fetch API | HTTP client |
-| Vercel | Deployment |
+**Frontend** — Next.js 16 (App Router) + React 19 + TypeScript, Tailwind CSS +
+shadcn/ui, React Context, native fetch.
 
----
-
-## ✨ Features
-
-### 🔐 Authentication & Authorization
-- User registration & login with JWT tokens
-- Role-based access control — ADMIN, LIBRARIAN, USER
-- Protected routes with automatic session handling
-- Auto redirect on token expiry
-
-### 📚 Book Management
-- Add, update, delete books (ADMIN/LIBRARIAN only)
-- View full book catalogue (all authenticated users)
-- Real-time availability tracking
-- Unique ISBN validation
-
-### 🔄 Transaction System
-- Issue books to members
-- Process book returns
-- Fine calculation for late returns
-- Full transaction history with filters
-- Status tracking — Active, Returned, Overdue
-
-### 🎨 UI/UX
-- Dark mode interface
-- Responsive design
-- Real-time dashboard stats
-- Quick action shortcuts
+**Testing / infra** — JUnit 5, Mockito, Testcontainers (MySQL), JaCoCo, Vitest +
+React Testing Library, Docker + Docker Compose, GitHub Actions CI, deployed on
+Railway (API) + Vercel (web).
 
 ---
 
 ## 🏗 Architecture
 
 ```
-┌─────────────────────┐         ┌──────────────────────┐
-│   Next.js Frontend  │ ──────► │  Spring Boot Backend  │
-│   (Vercel)          │  HTTPS  │  (Railway)            │
-└─────────────────────┘         └──────────┬───────────┘
-                                           │
-                                 ┌─────────▼───────────┐
-                                 │   MySQL Database     │
-                                 │   (Railway)          │
-                                 └─────────────────────┘
+┌──────────────────────┐   same-origin /api/*   ┌───────────────────────┐
+│   Next.js (Vercel)   │ ─────── proxy ───────► │  Spring Boot (Railway) │
+│   React 19 + TS      │                        │  Security 6 · JPA      │
+└──────────────────────┘                        └───────────┬───────────┘
+   access token: bearer header                              │ Flyway
+   refresh token: HttpOnly cookie                 ┌─────────▼───────────┐
+                                                  │   MySQL 8 (Railway)  │
+                                                  └─────────────────────┘
 ```
+
+The frontend never calls the backend cross-origin: it hits `/api/*` on its own
+origin and Next proxies to the API, which keeps the refresh cookie first-party.
 
 ---
 
-## 🔗 API Endpoints
+## 🔗 Key API Endpoints
 
-### Auth
 | Method | Endpoint | Access |
 |--------|----------|--------|
-| POST | `/auth/register` | Public |
-| POST | `/auth/login` | Public |
+| POST | `/api/v1/auth/register`, `/login` | Public |
+| POST | `/api/v1/auth/refresh`, `/logout` | Cookie |
+| GET | `/api/v1/books`, `/books/{id}` | Authenticated |
+| POST/PUT/DELETE | `/api/v1/books`, `/books/{id}` | ADMIN, LIBRARIAN |
+| POST | `/api/v1/issue`, `/return` | ADMIN, LIBRARIAN |
+| GET | `/api/v1/transactions`, `/transactions/{id}/receipt` | ADMIN, LIBRARIAN |
 
-### Books
-| Method | Endpoint | Access |
-|--------|----------|--------|
-| GET | `/books` | Authenticated |
-| GET | `/books/{id}` | Authenticated |
-| POST | `/books` | ADMIN, LIBRARIAN |
-| PUT | `/books/{id}` | ADMIN, LIBRARIAN |
-| DELETE | `/books/{id}` | ADMIN, LIBRARIAN |
-
-### Transactions
-| Method | Endpoint | Access |
-|--------|----------|--------|
-| GET | `/transactions` | ADMIN, LIBRARIAN |
-| POST | `/issue` | ADMIN, LIBRARIAN |
-| POST | `/return` | ADMIN, LIBRARIAN |
+Full contract in Swagger (`/swagger-ui.html`).
 
 ---
 
 ## 🚀 Running Locally
 
-### Prerequisites
-- Java 17+
-- Node.js 18+
-- MySQL 8+
+### One command (recommended)
+```bash
+docker compose up --build      # MySQL + backend
+cd frontend && pnpm install && pnpm dev
+```
 
-### Backend
+### Manual backend (JDK 17 + MySQL)
 ```bash
 cd backend
-
-# Configure application.properties
-spring.datasource.url=jdbc:mysql://localhost:3306/library_db
-spring.datasource.username=your_username
-spring.datasource.password=your_password
-spring.jpa.hibernate.ddl-auto=update
-app.jwt.secret=your-base64-encoded-secret
-
-# Run
-mvn spring-boot:run
+# Env: DB_URL, DB_USERNAME, DB_PASSWORD, JWT_SECRET (base64, >32 bytes)
+./mvnw spring-boot:run
 ```
+Schema is managed by **Flyway** (`ddl-auto=validate`) — no `ddl-auto=update`.
 
-### Frontend
+---
+
+## ✅ Testing
+
 ```bash
-cd frontend
+# Backend: unit + integration + coverage gate (JaCoCo report at target/site/jacoco)
+cd backend && ./mvnw verify        # Testcontainers MySQL tests need Docker
 
-# Install dependencies
-npm install
-
-# Configure env
-echo "NEXT_PUBLIC_API_URL=http://localhost:8080" > .env.local
-
-# Run
-npm run dev
+# Frontend
+cd frontend && pnpm test:run
 ```
 
-| Service | URL |
-|---------|-----|
-| Frontend | http://localhost:3000 |
-| Backend | http://localhost:8080 |
-| Swagger | http://localhost:8080/swagger-ui/index.html |
+Backend instruction coverage is ~49% and gated in CI; the meaningful coverage is
+the concurrency race, the auth/rotation/reuse flow, migration-vs-entity validation
+on real MySQL, and the fine calculation. Load/Lighthouse harness lives in
+[`perf/`](perf/README.md).
 
 ---
 
@@ -182,40 +168,21 @@ npm run dev
 
 ```
 Library-management-system/
-├── backend/
-│   └── src/main/java/com/library/
-│       ├── controller/
-│       ├── service/
-│       ├── repository/
-│       ├── entity/
-│       ├── dto/
-│       ├── security/
-│       ├── exception/
-│       └── config/
-├── frontend/
-│   ├── app/
-│   ├── components/
-│   ├── hooks/
-│   ├── lib/
-│   └── types/
-├── screenshots/
-│   ├── login.png
-│   ├── dashboard.png
-│   ├── issue.png
-│   ├── return.png
-│   └── transactions.png
-└── README.md
+├── backend/          Spring Boot API (controller/service/repository/entity/dto/security)
+│   └── src/main/resources/db/migration/   Flyway V1–V5
+├── frontend/         Next.js app (app/ components/ hooks/ lib/ context/ __tests__/)
+├── perf/             k6 load test + Lighthouse harness
+├── .github/workflows/ci.yml
+├── docker-compose.yml
+└── screenshots/
 ```
 
 ---
 
 ## 👨‍💻 Author
 
-**Pranjal Dubey**  
-B.Tech Computer Science — Sitare University, Lucknow
+**Pranjal Dubey** — B.Tech Computer Science, Sitare University
 
 [![GitHub](https://img.shields.io/badge/GitHub-Iampranjaldubey-black?logo=github)](https://github.com/Iampranjaldubey)
 
----
-
-*Built with ❤️ — LibraryOS, 2026*
+*Built as a depth-over-breadth portfolio project — see [RESUME_PROJECT_PLAN.md](RESUME_PROJECT_PLAN.md).*
