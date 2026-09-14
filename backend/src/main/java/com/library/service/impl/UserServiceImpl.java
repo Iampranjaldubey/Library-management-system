@@ -53,6 +53,14 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public UserResponse getCurrentUser(String email) {
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found: " + email));
+        return toResponse(user);
+    }
+
+    @Override
     @Transactional
     public UserResponse updateUser(Long id, UserUpdateRequest request) {
         User user = findUser(id);

@@ -4,7 +4,9 @@
  * update if the backend contract changes.
  */
 
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080"
+// Same-origin: auth calls go to /api/* on this Next app and are proxied to the
+// backend (see next.config rewrites), so the HttpOnly refresh cookie is first-party.
+const BASE_URL = ""
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -16,7 +18,8 @@ export interface AuthUser {
   email: string
   role: Role
   token: string
-  refreshToken: string
+  /** No longer returned by the API — the refresh token lives in an HttpOnly cookie. */
+  refreshToken?: string
   type: string
 }
 
@@ -77,6 +80,7 @@ export const authService = {
     const res = await fetch(`${BASE_URL}/api/v1/auth/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      credentials: "include", // accept the Set-Cookie refresh token
       body: JSON.stringify(payload),
     })
 
@@ -93,6 +97,7 @@ export const authService = {
     const res = await fetch(`${BASE_URL}/api/v1/auth/register`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      credentials: "include", // accept the Set-Cookie refresh token
       body: JSON.stringify(payload),
     })
 
@@ -105,11 +110,12 @@ export const authService = {
     return body.data as AuthUser
   },
 
-  async refresh(refreshToken: string): Promise<AuthUser> {
+  async refresh(): Promise<AuthUser> {
+    // The refresh token rides in the HttpOnly cookie, so there's nothing to send
+    // in the body; credentials:"include" makes the browser attach the cookie.
     const res = await fetch(`${BASE_URL}/api/v1/auth/refresh`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ refreshToken }),
+      credentials: "include",
     })
 
     if (!res.ok) throw await parseAuthError(res)
@@ -119,6 +125,19 @@ export const authService = {
       throw new AuthError("Refresh succeeded but no token received", 500)
     }
     return body.data as AuthUser
+  },
+
+  async logout(): Promise<void> {
+    // Best-effort: revokes the refresh token server-side and expires the HttpOnly
+    // cookie (JavaScript can't clear it). The local session is cleared regardless.
+    try {
+      await fetch(`${BASE_URL}/api/v1/auth/logout`, {
+        method: "POST",
+        credentials: "include",
+      })
+    } catch {
+      /* ignore network errors on logout */
+    }
   },
 
   async forgotPassword(email: string): Promise<string> {

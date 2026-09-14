@@ -197,9 +197,11 @@ function UserFooter({ isCollapsed, onLogout }: UserFooterProps) {
   return (
     <div className="border-t border-sidebar-border/50 p-3 space-y-1">
       {user && (
-        <div
+        <Link
+          href="/dashboard/profile"
           className={cn(
             "group relative flex items-center gap-3 rounded-xl px-3 py-2.5",
+            "transition-colors hover:bg-sidebar-accent/60",
             isCollapsed && "justify-center",
           )}
         >
@@ -244,7 +246,7 @@ function UserFooter({ isCollapsed, onLogout }: UserFooterProps) {
               <RoleBadge role={user.role} size="sm" />
             </span>
           )}
-        </div>
+        </Link>
       )}
 
       {/* Sign out */}

@@ -34,8 +34,8 @@ CREATE TABLE IF NOT EXISTS transactions (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Indexes for common query patterns
-CREATE INDEX IF NOT EXISTS idx_transactions_user_id ON transactions(user_id);
-CREATE INDEX IF NOT EXISTS idx_transactions_book_id ON transactions(book_id);
-CREATE INDEX IF NOT EXISTS idx_transactions_return_date ON transactions(return_date);
-CREATE INDEX IF NOT EXISTS idx_books_available ON books(available);
-CREATE INDEX IF NOT EXISTS idx_books_category ON books(category);
+CREATE INDEX idx_transactions_user_id ON transactions(user_id);
+CREATE INDEX idx_transactions_book_id ON transactions(book_id);
+CREATE INDEX idx_transactions_return_date ON transactions(return_date);
+CREATE INDEX idx_books_available ON books(available);
+CREATE INDEX idx_books_category ON books(category);

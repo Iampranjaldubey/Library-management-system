@@ -35,6 +35,8 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long> 
 
     List<Transaction> findByBookId(Long bookId);
 
+    boolean existsByBookId(Long bookId);
+
     // Active issue = returnDate is null
     Optional<Transaction> findByBookIdAndReturnDateIsNull(Long bookId);
 

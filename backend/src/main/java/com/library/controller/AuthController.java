@@ -3,6 +3,8 @@ package com.library.controller;
 import com.library.dto.request.*;
 import com.library.dto.response.ApiResponse;
 import com.library.dto.response.AuthResponse;
+import com.library.exception.TokenRefreshException;
+import com.library.security.RefreshTokenCookieFactory;
 import com.library.service.AuthService;
 import com.library.service.EmailVerificationService;
 import com.library.service.PasswordResetService;
@@ -11,7 +13,9 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -21,10 +25,11 @@ import org.springframework.web.bind.annotation.*;
 @Tag(name = "Authentication", description = "Register, login, and account management endpoints")
 public class AuthController {
 
-    private final AuthService              authService;
-    private final RefreshTokenService      refreshTokenService;
-    private final PasswordResetService     passwordResetService;
-    private final EmailVerificationService emailVerificationService;
+    private final AuthService               authService;
+    private final RefreshTokenService       refreshTokenService;
+    private final PasswordResetService      passwordResetService;
+    private final EmailVerificationService  emailVerificationService;
+    private final RefreshTokenCookieFactory refreshCookieFactory;
 
     @PostMapping("/register")
     @Operation(summary = "Register a new user",
@@ -33,8 +38,10 @@ public class AuthController {
             @Valid @RequestBody RegisterRequest request) {
 
         AuthResponse response = authService.register(request);
+        ResponseCookie cookie = moveRefreshTokenToCookie(response);
         return ResponseEntity
                 .status(HttpStatus.CREATED)
+                .header(HttpHeaders.SET_COOKIE, cookie.toString())
                 .body(ApiResponse.success(
                         "Registration successful. Please check your email to verify your account.", response));
     }
@@ -46,17 +53,51 @@ public class AuthController {
             @Valid @RequestBody LoginRequest request) {
 
         AuthResponse response = authService.login(request);
-        return ResponseEntity.ok(ApiResponse.success("Login successful", response));
+        ResponseCookie cookie = moveRefreshTokenToCookie(response);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.SET_COOKIE, cookie.toString())
+                .body(ApiResponse.success("Login successful", response));
     }
 
     @PostMapping("/refresh")
     @Operation(summary = "Refresh access token",
-               description = "Uses a valid refresh token to generate a new access token.")
+               description = "Reads the HttpOnly refresh-token cookie, rotates it, and returns a new access token.")
     public ResponseEntity<ApiResponse<AuthResponse>> refreshToken(
-            @Valid @RequestBody RefreshTokenRequest request) {
+            @CookieValue(name = RefreshTokenCookieFactory.COOKIE_NAME, required = false) String cookieToken) {
 
-        AuthResponse response = refreshTokenService.generateNewTokens(request);
-        return ResponseEntity.ok(ApiResponse.success("Token refreshed successfully", response));
+        if (cookieToken == null || cookieToken.isBlank()) {
+            throw new TokenRefreshException("No refresh token cookie present.");
+        }
+
+        RefreshTokenService.RotatedTokens rotated = refreshTokenService.rotate(cookieToken);
+        ResponseCookie cookie = refreshCookieFactory.create(rotated.refreshTokenValue());
+        return ResponseEntity.ok()
+                .header(HttpHeaders.SET_COOKIE, cookie.toString())
+                .body(ApiResponse.success("Token refreshed successfully", rotated.authResponse()));
+    }
+
+    @PostMapping("/logout")
+    @Operation(summary = "Log out",
+               description = "Revokes the current refresh token and clears the HttpOnly cookie.")
+    public ResponseEntity<ApiResponse<Void>> logout(
+            @CookieValue(name = RefreshTokenCookieFactory.COOKIE_NAME, required = false) String cookieToken) {
+
+        refreshTokenService.revokeByToken(cookieToken);
+        ResponseCookie cleared = refreshCookieFactory.clearing();
+        return ResponseEntity.ok()
+                .header(HttpHeaders.SET_COOKIE, cleared.toString())
+                .body(ApiResponse.success("Logged out successfully", null));
+    }
+
+    /**
+     * Moves the refresh token out of the JSON body and into an HttpOnly cookie:
+     * the body field is nulled (so it never reaches localStorage / JS), and the
+     * returned cookie is what actually carries the token to the browser.
+     */
+    private ResponseCookie moveRefreshTokenToCookie(AuthResponse response) {
+        ResponseCookie cookie = refreshCookieFactory.create(response.getRefreshToken());
+        response.setRefreshToken(null);
+        return cookie;
     }
 
     // ── Password Reset ────────────────────────────────────────────────────────

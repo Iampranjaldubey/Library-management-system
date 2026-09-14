@@ -5,13 +5,16 @@ import com.library.dto.request.ReturnRequest;
 import com.library.dto.response.ApiResponse;
 import com.library.dto.response.FinesSummaryResponse;
 import com.library.dto.response.TransactionResponse;
+import com.library.service.ReceiptService;
 import com.library.service.TransactionService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.transaction.annotation.Transactional;
@@ -26,6 +29,7 @@ import java.util.List;
 public class TransactionController {
 
     private final TransactionService transactionService;
+    private final ReceiptService     receiptService;
 
     @PostMapping("/api/v1/issue")
     @PreAuthorize("hasAnyRole('ADMIN', 'LIBRARIAN')")
@@ -105,6 +109,22 @@ public class TransactionController {
         return ResponseEntity.ok(
                 ApiResponse.success("User transactions fetched successfully",
                         transactionService.getTransactionsByUser(userId)));
+    }
+
+    @GetMapping("/api/v1/transactions/{id}/receipt")
+    @PreAuthorize("hasAnyRole('ADMIN', 'LIBRARIAN')")
+    @Transactional(readOnly = true)
+    @Operation(summary = "Download a transaction receipt (PDF)",
+               description = "Generates a printable PDF receipt for a single transaction. "
+                       + "Requires ADMIN or LIBRARIAN role.")
+    public ResponseEntity<byte[]> downloadReceipt(@PathVariable Long id) {
+        TransactionResponse transaction = transactionService.getTransaction(id);
+        byte[] pdf = receiptService.generateTransactionReceipt(transaction);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        "attachment; filename=\"receipt-" + id + ".pdf\"")
+                .contentType(MediaType.APPLICATION_PDF)
+                .body(pdf);
     }
 }
 

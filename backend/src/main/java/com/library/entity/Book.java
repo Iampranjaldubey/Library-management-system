@@ -34,6 +34,18 @@ public class Book {
     private int availableCopies = 1;
 
     /**
+     * Optimistic-locking version. Hibernate appends {@code AND version = ?} to
+     * every UPDATE and bumps the value on write, so two transactions that both
+     * read the same row cannot both commit — the loser gets an
+     * {@code OptimisticLockException}. This is what makes concurrent book
+     * issue/return safe against the lost-update (over-issue) race.
+     * Managed entirely by the persistence provider; never set it by hand.
+     */
+    @Version
+    @Column(nullable = false)
+    private Long version;
+
+    /**
      * Backward-compatible convenience method.
      * A book is "available" if at least one copy can be issued.
      */

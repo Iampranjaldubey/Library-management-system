@@ -85,5 +85,26 @@ public class BookController {
         return ResponseEntity.ok(
                 ApiResponse.success("Book fetched successfully", bookService.getBookById(id)));
     }
+
+    @PutMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'LIBRARIAN')")
+    @Operation(summary = "Update a book",
+               description = "Updates an existing book's details. Requires ADMIN or LIBRARIAN role.")
+    public ResponseEntity<ApiResponse<BookResponse>> updateBook(
+            @PathVariable Long id,
+            @Valid @RequestBody BookRequest request) {
+
+        BookResponse response = bookService.updateBook(id, request);
+        return ResponseEntity.ok(ApiResponse.success("Book updated successfully", response));
+    }
+
+    @DeleteMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'LIBRARIAN')")
+    @Operation(summary = "Delete a book",
+               description = "Removes a book from the catalogue. Requires ADMIN or LIBRARIAN role.")
+    public ResponseEntity<ApiResponse<Void>> deleteBook(@PathVariable Long id) {
+        bookService.deleteBook(id);
+        return ResponseEntity.ok(ApiResponse.success("Book deleted successfully", null));
+    }
 }
 

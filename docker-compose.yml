@@ -1,0 +1,52 @@
+# One-command local stack: MySQL + Spring Boot backend.
+#
+# NOTE: the credentials below are throwaway LOCAL-DEV values only.
+# Never reuse them in staging/production — inject real secrets via the
+# environment there. This file exists so a reviewer can run:
+#
+#     docker compose up --build
+#
+# and get a working API at http://localhost:8080/swagger-ui.html
+services:
+  db:
+    image: mysql:8.0
+    container_name: libraryos-db
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: library_db
+      MYSQL_USER: library_user
+      MYSQL_PASSWORD: library_pass
+      MYSQL_ROOT_PASSWORD: root_pass
+    ports:
+      # Host 3307 -> container 3306 to avoid clashing with a local MySQL on 3306.
+      # The backend connects internally via db:3306, so this only affects host access.
+      - "3307:3306"
+    volumes:
+      - db_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot_pass"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: ./backend
+    container_name: libraryos-backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DB_URL: "jdbc:mysql://db:3306/library_db?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true"
+      DB_USERNAME: library_user
+      DB_PASSWORD: library_pass
+      JWT_SECRET: "dGhpc2lzYXZlcnlzdHJvbmdzZWNyZXRrZXlmb3JsaWJyYXJ5bWFuYWdlbWVudHN5c3RlbTIwMjQ="
+      PORT: "8080"
+      # Local dev only: allow login without SMTP email verification.
+      APP_AUTH_REQUIRE_EMAIL_VERIFICATION: "false"
+    ports:
+      - "8080:8080"
+
+volumes:
+  db_data:

@@ -9,6 +9,8 @@ import java.util.List;
 
 public interface BookService {
     BookResponse  addBook(BookRequest request);
+    BookResponse  updateBook(Long id, BookRequest request);
+    void          deleteBook(Long id);
     List<BookResponse> getAllBooks();
     List<BookResponse> getAvailableBooks();
     BookResponse  getBookById(Long id);
