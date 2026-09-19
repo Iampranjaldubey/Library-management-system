@@ -42,6 +42,14 @@ public class User implements UserDetails {
     @Builder.Default
     private boolean emailVerified = false;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20, columnDefinition = "varchar(20)")
+    @Builder.Default
+    private AuthProvider provider = AuthProvider.LOCAL;
+
+    @Column(name = "provider_id")
+    private String providerId;
+
     @Column
     private LocalDateTime createdAt;
 

@@ -427,6 +427,20 @@ export const booksApi = {
 
   delete: (id: number) =>
     apiFetch<void>(`/api/v1/books/${id}`, { method: "DELETE" }),
+
+  importCsv: async (file: File) => {
+    const token = localStorage.getItem(getStorageKey("TOKEN"))
+    const formData = new FormData()
+    formData.append("file", file)
+    const res = await fetch(`${config.apiUrl}/api/v1/books/import`, {
+      method: "POST",
+      credentials: "include",
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: formData,
+    })
+    if (!res.ok) throw new ApiError("Failed to import CSV", res.status)
+    return res.json()
+  },
 }
 
 // ─── Transactions API ─────────────────────────────────────────────────────────

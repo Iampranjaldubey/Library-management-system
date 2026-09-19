@@ -41,4 +41,7 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long> 
     Optional<Transaction> findByBookIdAndReturnDateIsNull(Long bookId);
 
     List<Transaction> findByUserIdAndReturnDateIsNull(Long userId);
+
+    @Query("SELECT t FROM Transaction t JOIN FETCH t.user JOIN FETCH t.book WHERE t.dueDate = :dueDate AND t.returnDate IS NULL")
+    List<Transaction> findByDueDateAndReturnDateIsNullWithDetails(@Param("dueDate") java.time.LocalDate dueDate);
 }

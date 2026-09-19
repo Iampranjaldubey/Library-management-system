@@ -1,6 +1,6 @@
 # 📚 LibraryOS — Full-Stack Library Platform
 
-Concurrency-safe book circulation with JWT auth, refresh-token rotation, and a
+Concurrency-safe book circulation with JWT + Google OAuth2 auth, refresh-token rotation, and a
 one-command Docker stack. Spring Boot 3 + MySQL on the back, Next.js 16 +
 TypeScript on the front.
 
@@ -50,7 +50,9 @@ retries the loser in a fresh `REQUIRES_NEW` transaction with bounded backoff.
 Rejected alternatives (pessimistic `SELECT ... FOR UPDATE`, atomic conditional
 `UPDATE`) are documented inline.
 
-### Refresh-token rotation with reuse detection
+### Refresh-token rotation & Google OAuth2
+The system supports both traditional email/password and **Google OAuth2** logins.
+Regardless of the login method, the backend issues a stateless Access Token and a long-lived Refresh Token.
 The refresh token lives in an **HttpOnly, SameSite, Secure-configurable cookie**
 (never in the JSON body or `localStorage`, so XSS can't read it). Every `/refresh`
 [rotates](backend/src/main/java/com/library/service/impl/RefreshTokenServiceImpl.java)
@@ -84,7 +86,7 @@ the transactions UI downloads it as a blob.
 
 ## 🛠 Tech Stack
 
-**Backend** — Java 17, Spring Boot 3.2, Spring Security 6 + JWT, Spring Data JPA,
+**Backend** — Java 17, Spring Boot 3.2, Spring Security 6 + JWT + Google OAuth2, Spring Data JPA,
 MySQL 8, Flyway migrations, OpenPDF, springdoc/OpenAPI, Maven (wrapper).
 
 **Frontend** — Next.js 16 (App Router) + React 19 + TypeScript, Tailwind CSS +
@@ -141,6 +143,7 @@ cd frontend && pnpm install && pnpm dev
 ```bash
 cd backend
 # Env: DB_URL, DB_USERNAME, DB_PASSWORD, JWT_SECRET (base64, >32 bytes)
+# Optional for OAuth: GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET
 ./mvnw spring-boot:run
 ```
 Schema is managed by **Flyway** (`ddl-auto=validate`) — no `ddl-auto=update`.
@@ -152,7 +155,7 @@ Schema is managed by **Flyway** (`ddl-auto=validate`) — no `ddl-auto=update`.
 The frontend runs on Vercel; the API is a Docker service and the DB is MySQL. A free setup:
 
 1. **Database — [Aiven for MySQL](https://aiven.io/free-mysql-database)** (free, no card). Create a MySQL service and note host/port/db/user/password. Your `DB_URL` is `jdbc:mysql://<host>:<port>/<database>?ssl-mode=REQUIRED`.
-2. **API — [Render](https://render.com) (Docker, free).** This repo ships a [`render.yaml`](render.yaml) blueprint: in Render, **New → Blueprint** and pick this repo. Set the prompted secrets — `DB_URL`, `DB_USERNAME`, `DB_PASSWORD`, `JWT_SECRET` (`openssl rand -base64 48`), `FRONTEND_URL`. Flyway migrates on first boot; the health check is `/api/v1/health`. (Free services sleep after ~15 min idle and cold-start in ~1 min.)
+2. **API — [Render](https://render.com) (Docker, free).** This repo ships a [`render.yaml`](render.yaml) blueprint: in Render, **New → Blueprint** and pick this repo. Set the prompted secrets — `DB_URL`, `DB_USERNAME`, `DB_PASSWORD`, `JWT_SECRET` (`openssl rand -base64 48`), `FRONTEND_URL`, and optionally `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`. Flyway migrates on first boot; the health check is `/api/v1/health`. (Free services sleep after ~15 min idle and cold-start in ~1 min.)
 3. **Frontend — Vercel.** Add `BACKEND_API_URL` = your Render URL as a **Production** environment variable, then redeploy (Next bakes the proxy target at build time, so it must be set before the build). The app proxies `/api/*` same-origin (`next.config.mjs`), so the HttpOnly refresh cookie stays first-party across the Vercel → Render hop.
 4. Update the demo links above once the API URL is stable.
 

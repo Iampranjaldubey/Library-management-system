@@ -106,5 +106,15 @@ public class BookController {
         bookService.deleteBook(id);
         return ResponseEntity.ok(ApiResponse.success("Book deleted successfully", null));
     }
-}
 
+    @PostMapping("/import")
+    @PreAuthorize("hasAnyRole('ADMIN', 'LIBRARIAN')")
+    @Operation(summary = "Import books from CSV",
+               description = "Upload a CSV file to bulk import books. Requires ADMIN or LIBRARIAN role.")
+    public ResponseEntity<ApiResponse<java.util.Map<String, Object>>> importBooks(
+            @RequestParam("file") org.springframework.web.multipart.MultipartFile file) {
+        
+        java.util.Map<String, Object> result = bookService.importBooksFromCsv(file);
+        return ResponseEntity.ok(ApiResponse.success("CSV import processed", result));
+    }
+}

@@ -160,13 +160,43 @@ export default function BooksPage() {
           </Tooltip>
 
           {canEdit && (
-            <Button
-              className="gap-2 bg-primary text-primary-foreground hover:bg-primary/90"
-              onClick={openAdd}
-            >
-              <Plus className="h-4 w-4" />
-              Add Book
-            </Button>
+            <div className="flex items-center gap-2">
+              <input 
+                type="file" 
+                accept=".csv" 
+                className="hidden" 
+                id="csv-upload" 
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  const toastId = toast.loading("Importing CSV...");
+                  try {
+                    const result = await booksApi.importCsv(file);
+                    const successCount = result.data?.successCount || 0;
+                    const skipCount = result.data?.skipCount || 0;
+                    toast.success(`Imported ${successCount} books. Skipped ${skipCount}.`, { id: toastId });
+                    fetchBooks();
+                  } catch (err: any) {
+                    toast.error("CSV import failed", { description: err.message, id: toastId });
+                  }
+                  e.target.value = ''; // reset
+                }}
+              />
+              <Button
+                variant="outline"
+                className="gap-2"
+                onClick={() => document.getElementById('csv-upload')?.click()}
+              >
+                Import CSV
+              </Button>
+              <Button
+                className="gap-2 bg-primary text-primary-foreground hover:bg-primary/90"
+                onClick={openAdd}
+              >
+                <Plus className="h-4 w-4" />
+                Add Book
+              </Button>
+            </div>
           )}
         </PageHeader>
 

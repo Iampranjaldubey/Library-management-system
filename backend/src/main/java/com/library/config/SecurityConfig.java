@@ -29,6 +29,8 @@ import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import java.util.Arrays;
 
+import com.library.security.OAuth2LoginSuccessHandler;
+
 @Configuration
 @EnableWebSecurity
 @EnableMethodSecurity
@@ -39,15 +41,19 @@ public class SecurityConfig {
     private final JwtAuthEntryPoint       jwtAuthEntryPoint;
     private final JwtAccessDeniedHandler  jwtAccessDeniedHandler;
     private final UserRepository          userRepository;
+    @Lazy
+    private final OAuth2LoginSuccessHandler oAuth2LoginSuccessHandler;
 
     public SecurityConfig(@Lazy JwtAuthenticationFilter jwtAuthFilter,
                           JwtAuthEntryPoint jwtAuthEntryPoint,
                           JwtAccessDeniedHandler jwtAccessDeniedHandler,
-                          UserRepository userRepository) {
+                          UserRepository userRepository,
+                          @Lazy OAuth2LoginSuccessHandler oAuth2LoginSuccessHandler) {
         this.jwtAuthFilter          = jwtAuthFilter;
         this.jwtAuthEntryPoint      = jwtAuthEntryPoint;
         this.jwtAccessDeniedHandler = jwtAccessDeniedHandler;
         this.userRepository         = userRepository;
+        this.oAuth2LoginSuccessHandler = oAuth2LoginSuccessHandler;
     }
     // ── Public endpoints ──────────────────────────────────────────────────────
     private static final String[] PUBLIC_URLS = {
@@ -87,6 +93,9 @@ public class SecurityConfig {
                 // GET /books is open to all authenticated users
                 .requestMatchers(HttpMethod.GET, "/api/v1/books/**").authenticated()
                 .anyRequest().authenticated()
+            )
+            .oauth2Login(oauth2 -> oauth2
+                .successHandler(oAuth2LoginSuccessHandler)
             )
             .authenticationProvider(authenticationProvider())
             .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);

@@ -7,6 +7,9 @@ import org.springframework.data.domain.Pageable;
 
 import java.util.List;
 
+import org.springframework.web.multipart.MultipartFile;
+import java.util.Map;
+
 public interface BookService {
     BookResponse  addBook(BookRequest request);
     BookResponse  updateBook(Long id, BookRequest request);
@@ -14,6 +17,7 @@ public interface BookService {
     List<BookResponse> getAllBooks();
     List<BookResponse> getAvailableBooks();
     BookResponse  getBookById(Long id);
+    Map<String, Object> importBooksFromCsv(MultipartFile file);
 
     // ── Paginated queries ─────────────────────────────────────────────────────
     PagedResponse<BookResponse> getAllBooks(Pageable pageable);

@@ -17,7 +17,14 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import org.springframework.web.multipart.MultipartFile;
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -144,6 +151,87 @@ public class BookServiceImpl implements BookService {
             page = bookRepository.findAll(pageable);
         }
         return toPagedResponse(page);
+    }
+
+    // ── CSV Import ────────────────────────────────────────────────────────────
+
+    @Override
+    @Transactional
+    public Map<String, Object> importBooksFromCsv(MultipartFile file) {
+        int successCount = 0;
+        int skipCount = 0;
+        List<String> errors = new ArrayList<>();
+
+        try (BufferedReader br = new BufferedReader(new InputStreamReader(file.getInputStream(), StandardCharsets.UTF_8))) {
+            String line;
+            boolean isFirstLine = true;
+            int lineNumber = 0;
+
+            while ((line = br.readLine()) != null) {
+                lineNumber++;
+                if (line.trim().isEmpty()) continue;
+
+                // Handle header
+                if (isFirstLine) {
+                    isFirstLine = false;
+                    // If it looks like a header, skip it
+                    if (line.toLowerCase().contains("title") && line.toLowerCase().contains("author")) {
+                        continue;
+                    }
+                }
+
+                // Simple split (won't handle quotes with commas inside, but sufficient for simple data)
+                String[] columns = line.split(",(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)");
+                
+                if (columns.length < 5) {
+                    skipCount++;
+                    errors.add("Line " + lineNumber + ": Invalid format (expected 5 columns, got " + columns.length + ")");
+                    continue;
+                }
+
+                String title = columns[0].replace("\"", "").trim();
+                String author = columns[1].replace("\"", "").trim();
+                String isbn = columns[2].replace("\"", "").trim();
+                String category = columns[3].replace("\"", "").trim();
+                int totalCopies;
+
+                try {
+                    totalCopies = Integer.parseInt(columns[4].trim());
+                    if (totalCopies < 1) totalCopies = 1;
+                } catch (NumberFormatException e) {
+                    skipCount++;
+                    errors.add("Line " + lineNumber + ": Invalid total copies number");
+                    continue;
+                }
+
+                // Check ISBN unique
+                if (bookRepository.existsByIsbn(isbn)) {
+                    skipCount++;
+                    errors.add("Line " + lineNumber + ": ISBN " + isbn + " already exists");
+                    continue;
+                }
+
+                Book book = Book.builder()
+                        .title(title)
+                        .author(author)
+                        .isbn(isbn)
+                        .category(category)
+                        .totalCopies(totalCopies)
+                        .availableCopies(totalCopies)
+                        .build();
+
+                bookRepository.save(book);
+                successCount++;
+            }
+        } catch (Exception e) {
+            throw new BadRequestException("Failed to process CSV file: " + e.getMessage());
+        }
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("successCount", successCount);
+        result.put("skipCount", skipCount);
+        result.put("errors", errors);
+        return result;
     }
 
     // ── Package-level helper used by TransactionService ───────────────────────
