@@ -1,5 +1,7 @@
 package com.library.config;
 
+import org.springframework.beans.factory.annotation.Autowired;
+
 import com.library.repository.UserRepository;
 import com.library.security.JwtAccessDeniedHandler;
 import com.library.security.JwtAuthEntryPoint;
@@ -25,6 +27,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import java.util.Arrays;
@@ -41,19 +44,24 @@ public class SecurityConfig {
     private final JwtAuthEntryPoint       jwtAuthEntryPoint;
     private final JwtAccessDeniedHandler  jwtAccessDeniedHandler;
     private final UserRepository          userRepository;
+
+    /** Null when no OAuth2 client registrations are configured (e.g. tests). */
     @Lazy
-    private final OAuth2LoginSuccessHandler oAuth2LoginSuccessHandler;
+    @Autowired(required = false)
+    private OAuth2LoginSuccessHandler oAuth2LoginSuccessHandler;
+
+    /** Null when the OAuth2 client auto-config is excluded (e.g. tests). */
+    @Autowired(required = false)
+    private ClientRegistrationRepository clientRegistrationRepository;
 
     public SecurityConfig(@Lazy JwtAuthenticationFilter jwtAuthFilter,
                           JwtAuthEntryPoint jwtAuthEntryPoint,
                           JwtAccessDeniedHandler jwtAccessDeniedHandler,
-                          UserRepository userRepository,
-                          @Lazy OAuth2LoginSuccessHandler oAuth2LoginSuccessHandler) {
+                          UserRepository userRepository) {
         this.jwtAuthFilter          = jwtAuthFilter;
         this.jwtAuthEntryPoint      = jwtAuthEntryPoint;
         this.jwtAccessDeniedHandler = jwtAccessDeniedHandler;
         this.userRepository         = userRepository;
-        this.oAuth2LoginSuccessHandler = oAuth2LoginSuccessHandler;
     }
     // ── Public endpoints ──────────────────────────────────────────────────────
     private static final String[] PUBLIC_URLS = {
@@ -93,10 +101,18 @@ public class SecurityConfig {
                 // GET /books is open to all authenticated users
                 .requestMatchers(HttpMethod.GET, "/api/v1/books/**").authenticated()
                 .anyRequest().authenticated()
-            )
-            .oauth2Login(oauth2 -> oauth2
+            );
+
+        // Enable OAuth2 login only when credentials are configured (i.e. the
+        // ClientRegistrationRepository bean exists). In tests that exclude the
+        // OAuth2 auto-configuration this bean is absent and we skip it.
+        if (clientRegistrationRepository != null && oAuth2LoginSuccessHandler != null) {
+            http.oauth2Login(oauth2 -> oauth2
                 .successHandler(oAuth2LoginSuccessHandler)
-            )
+            );
+        }
+
+        http
             .authenticationProvider(authenticationProvider())
             .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
 
